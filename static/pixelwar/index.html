@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Kare Kapmaca</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; text-align: center; background: #2c3e50; color: white; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; }
+
+        #loginArea { background: #34495e; padding: 20px; border-radius: 10px; margin-top: 50px; }
+        input, button { padding: 12px; font-size: 16px; border-radius: 5px; border: none; margin: 5px; }
+        button { background: #e74c3c; color: white; cursor: pointer; font-weight: bold; }
+        button:hover { background: #c0392b; }
+
+        #gameArea { display: none; }
+        #infoBar { display: flex; justify-content: space-between; align-items: center; background: #34495e; padding: 10px; border-radius: 8px; margin-bottom: 15px; }
+        #timer { font-size: 2em; font-weight: bold; color: #f1c40f; }
+
+        /* OYUN ALANI IZGARASI */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr); /* 6 Sütun */
+            gap: 5px;
+            background: #7f8c8d;
+            padding: 5px;
+            border-radius: 8px;
+        }
+        .cell {
+            aspect-ratio: 1; /* Kare olması için */
+            background-color: #ecf0f1;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .cell:active { transform: scale(0.9); }
+
+        .score-board { margin-top: 20px; text-align: left; }
+        .score-item { padding: 5px; margin: 2px 0; border-radius: 4px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🎨 KARE KAPMACA</h1>
+
+    <div id="loginArea">
+        <h3>Savaşa Katıl</h3>
+        <input id="roomId" placeholder="Oda Adı (örn: savas1)" value="savas1">
+        <input id="username" placeholder="Adın">
+        <button onclick="joinGame()">Giriş Yap</button>
+    </div>
+
+    <div id="gameArea">
+        <div id="infoBar">
+            <div id="myColorDisplay">Benim Rengim: <span id="colorBox" style="padding:0 15px; border:1px solid #fff;">&nbsp;</span></div>
+            <div id="timer">--</div>
+        </div>
+
+        <div id="grid" class="grid">
+            </div>
+
+        <div id="status" style="margin-top:15px; font-size:1.2em;">Oyunun başlaması bekleniyor...</div>
+        <button id="startBtn" onclick="startGame()" style="margin-top:10px; width:100%; background:#27ae60;">SAVAŞI BAŞLAT</button>
+
+        <div id="scores" class="score-board"></div>
+    </div>
+</div>
+
+<script>
+    let ws;
+    const gridSize = 36; // 6x6
+
+    // Izgarayı oluştur
+    const gridEl = document.getElementById("grid");
+    for(let i=0; i<gridSize; i++) {
+        const div = document.createElement("div");
+        div.className = "cell";
+        div.id = "c-" + i;
+        div.onclick = () => clickCell(i);
+        gridEl.appendChild(div);
+    }
+
+    function joinGame() {
+        const r = document.getElementById("roomId").value;
+        const n = document.getElementById("username").value;
+        if(!r || !n) return alert("Eksik bilgi!");
+
+        const proto = location.protocol === "https:" ? "wss" : "ws";
+        ws = new WebSocket(proto + "://" + location.host + "/ws/pixelwar");
+
+
+        ws.onopen = () => {
+            ws.send(JSON.stringify({type: "join", roomId: r, name: n}));
+            document.getElementById("loginArea").style.display = "none";
+            document.getElementById("gameArea").style.display = "block";
+        };
+
+        ws.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+
+            if(data.type === "welcome") {
+                document.getElementById("colorBox").style.backgroundColor = data.color;
+            }
+            else if(data.type === "state") {
+                // Tüm tahtayı boya
+                data.board.forEach((color, idx) => {
+                    const cell = document.getElementById("c-" + idx);
+                    cell.style.backgroundColor = color || "#ecf0f1";
+                });
+                updateScores(data.scores);
+            }
+            else if(data.type === "tick") {
+                document.getElementById("timer").innerText = data.seconds;
+                document.getElementById("status").innerText = "⏳ SAVAŞ DEVAM EDİYOR!";
+                document.getElementById("startBtn").style.display = "none";
+            }
+            else if(data.type === "game_over") {
+                document.getElementById("timer").innerText = "BİTTİ";
+                document.getElementById("status").innerText = `🏆 KAZANAN: ${data.winner}`;
+                document.getElementById("startBtn").style.display = "block";
+                document.getElementById("startBtn").innerText = "YENİDEN BAŞLAT";
+            }
+        };
+    }
+
+    function clickCell(idx) {
+        if(ws) ws.send(JSON.stringify({type: "click", idx: idx}));
+    }
+
+    function startGame() {
+        if(ws) ws.send(JSON.stringify({type: "start"}));
+    }
+
+    function updateScores(scores) {
+        const div = document.getElementById("scores");
+        div.innerHTML = "<h4>Skorlar:</h4>";
+        for (const [name, score] of Object.entries(scores)) {
+            div.innerHTML += `<div class="score-item" style="border:1px solid #555;">${name}: ${score} kare</div>`;
+        }
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,1306 @@
+gradient<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tic-Tac-Toe (Online)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at 0% 0%, #a5b4fc, #f97373);
+      background-attachment: fixed;
+      padding: 16px;
+    }
+
+    .outer {
+      max-width: 900px;
+      width: 100%;
+      border-radius: 32px;
+      padding: 28px 30px 26px;
+      background: linear-gradient(135deg, rgba(255,255,255,0.2), rgba(255,255,255,0.05));
+      box-shadow:
+        0 18px 55px rgba(15,23,42,0.32),
+        0 0 0 1px rgba(255,255,255,0.3);
+      backdrop-filter: blur(28px);
+      color: #111827;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .outer::before,
+    .outer::after {
+      content: "";
+      position: absolute;
+      border-radius: 999px;
+      filter: blur(20px);
+      opacity: 0.7;
+      pointer-events: none;
+    }
+
+    .outer::before {
+      width: 220px;
+      height: 220px;
+      background: radial-gradient(circle, rgba(59,130,246,0.8), transparent);
+      top: -80px;
+      right: -60px;
+    }
+
+    .outer::after {
+      width: 200px;
+      height: 200px;
+      background: radial-gradient(circle, rgba(251,146,60,0.9), transparent);
+      bottom: -60px;
+      left: -40px;
+    }
+
+    /* Oyun ekranı grid yapısı */
+    .content {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: minmax(0, 3fr) minmax(0, 2.5fr);
+      gap: 32px;
+    }
+
+    @media (max-width: 820px) {
+      .content {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    h1 {
+      font-size: 32px;
+      letter-spacing: 0.12em;
+      text-align: center;
+      margin-bottom: 6px;
+    }
+
+    .title-sub {
+      text-align: center;
+      font-size: 14px;
+      color: #4b5563;
+      margin-bottom: 22px;
+    }
+
+    .tagline {
+      text-align: center;
+      font-size: 13px;
+      color: #6b7280;
+      margin-bottom: 20px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(15,23,42,0.08);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #374151;
+      margin-bottom: 8px;
+    }
+
+    .badge span {
+      display: inline-block;
+      width: 5px;
+      height: 5px;
+      border-radius: 999px;
+      margin-right: 6px;
+      background: #22c55e;
+    }
+
+    .panel {
+      background: rgba(255,255,255,0.8);
+      border-radius: 22px;
+      padding: 18px 20px 16px;
+      box-shadow: 0 10px 30px rgba(15,23,42,0.18);
+      border: 1px solid rgba(255,255,255,0.7);
+    }
+
+    .panel h2 {
+      font-size: 18px;
+      margin-bottom: 4px;
+    }
+
+    .panel p {
+      font-size: 13px;
+      color: #6b7280;
+      margin-bottom: 12px;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    label {
+      font-size: 12px;
+      color: #6b7280;
+      padding-left: 4px;
+    }
+
+    input[type="text"],
+    select {
+      border-radius: 999px;
+      border: 1px solid #e5e7eb;
+      padding: 8px 12px;
+      font-size: 13px;
+      background: rgba(249,250,251,0.9);
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+    }
+
+    input[type="text"]:focus,
+    select:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 1px rgba(129,140,248,0.5);
+      background: #ffffff;
+    }
+
+    .play-btn {
+      margin-top: 10px;
+      width: 100%;
+      border-radius: 999px;
+      border: none;
+      padding: 10px 16px;
+      font-size: 15px;
+      font-weight: 600;
+      color: #ffffff;
+      cursor: pointer;
+      background: linear-gradient(90deg, #3b82f6, #f97316);
+      box-shadow: 0 12px 30px rgba(59,130,246,0.45);
+      transition: transform 0.09s ease, box-shadow 0.09s ease, filter 0.15s ease;
+    }
+
+    .play-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 16px 38px rgba(15,23,42,0.38);
+      filter: brightness(1.03);
+    }
+
+    .play-btn:active {
+      transform: translateY(1px);
+      box-shadow: 0 8px 20px rgba(15,23,42,0.3);
+      filter: brightness(0.97);
+    }
+
+    .bottom-strip {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px dashed rgba(148,163,184,0.7);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #6b7280;
+    }
+
+    .pill {
+      border-radius: 999px;
+      padding: 4px 10px;
+      background: rgba(15,23,42,0.04);
+    }
+
+    .pill strong {
+      color: #111827;
+    }
+
+    .status-text {
+      font-size: 12px;
+      color: #4b5563;
+      margin-top: 6px;
+      min-height: 18px;
+    }
+
+    /* Board side */
+
+    .board-panel {
+      background: #111827;
+      border-radius: 24px;
+      padding: 18px 18px 16px;
+      box-shadow:
+        0 14px 40px rgba(15,23,42,0.7),
+        0 0 0 1px rgba(148,163,184,0.35);
+      color: #e5e7eb;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .board-panel::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at 0 0, rgba(96,165,250,0.6), transparent 50%),
+        radial-gradient(circle at 100% 100%, rgba(251,146,60,0.7), transparent 50%);
+      opacity: 0.18;
+      pointer-events: none;
+    }
+
+    .board-header {
+      position: relative;
+      z-index: 1;
+      margin-bottom: 12px;
+      text-align: left;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .board-header h3 {
+      font-size: 15px;
+      margin-bottom: 2px;
+    }
+
+    .board-header span {
+      font-size: 12px;
+      color: #9ca3af;
+    }
+
+    .board-header-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+    }
+
+    .back-link {
+      font-size: 11px;
+      color: #9ca3af;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    .board-wrapper {
+      position: relative;
+      z-index: 1;
+      padding: 10px 6px 6px;
+      background: radial-gradient(circle, rgba(15,23,42,0.8), rgba(15,23,42,1));
+      border-radius: 20px;
+      border: 1px solid rgba(148,163,184,0.6);
+      box-shadow: inset 0 0 0 1px rgba(15,23,42,0.7);
+    }
+
+    .board-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .cell {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border-radius: 14px;
+      border: 1px solid rgba(148,163,184,0.6);
+      background: radial-gradient(circle at 30% 20%, #1f2937, #020617);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 34px;
+      font-weight: 700;
+      cursor: pointer;
+      user-select: none;
+      box-shadow:
+        0 4px 10px rgba(15,23,42,0.9),
+        inset 0 0 0 1px rgba(15,23,42,0.7);
+      transition:
+        transform 0.08s ease,
+        box-shadow 0.1s ease,
+        border-color 0.16s ease,
+        background 0.16s ease,
+        opacity 0.12s ease;
+      color: #e5e7eb;
+    }
+
+    .cell:hover {
+      transform: translateY(-1px);
+      background: radial-gradient(circle at 30% 20%, #111827, #020617);
+      border-color: #60a5fa;
+      box-shadow:
+        0 6px 16px rgba(15,23,42,0.95),
+        0 0 0 1px rgba(96,165,250,0.5);
+    }
+
+    .cell.disabled {
+      cursor: default;
+      opacity: 0.55;
+      transform: none;
+      box-shadow:
+        0 3px 7px rgba(15,23,42,0.8),
+        inset 0 0 0 1px rgba(15,23,42,0.8);
+    }
+
+    .cell.x {
+      color: #fb923c;
+      text-shadow: 0 0 8px rgba(251,146,60,0.8);
+    }
+
+    .cell.o {
+      color: #38bdf8;
+      text-shadow: 0 0 10px rgba(56,189,248,0.9);
+    }
+
+    .scoreboard {
+      position: relative;
+      z-index: 1;
+      margin-top: 10px;
+      margin-bottom: 6px;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .score-item {
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+    }
+
+    .score-item .label {
+      font-size: 13px;
+      color:#9ca3af;
+      margin-bottom:2px;
+    }
+
+    .score-item .value {
+      font-size: 26px;
+      font-weight: 700;
+    }
+
+    .score-center {
+      text-align:center;
+      font-size: 11px;
+      color:#cbd5f5;
+    }
+
+    .score-center div:first-child {
+      font-weight:600;
+      margin-bottom:2px;
+    }
+
+    .board-footer {
+      margin-top: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: #9ca3af;
+      gap: 10px;
+    }
+
+    .pill-dark {
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: rgba(15,23,42,0.9);
+      border: 1px solid rgba(148,163,184,0.7);
+      font-size: 11px;
+    }
+
+    .pill-dark strong {
+      color: #e5e7eb;
+    }
+
+    .log {
+      margin-top: 8px;
+      background: rgba(15,23,42,0.95);
+      border-radius: 14px;
+      padding: 8px 9px;
+      font-size: 11px;
+      max-height: 120px;
+      overflow-y: auto;
+      border: 1px solid rgba(148,163,184,0.7);
+      box-shadow: inset 0 0 0 1px rgba(15,23,42,1);
+    }
+
+    .log p {
+      margin-bottom: 3px;
+      color: #e5e7eb;
+    }
+
+    .log p span.tag {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 999px;
+      margin-right: 4px;
+      font-size: 10px;
+      font-weight: 500;
+      background: rgba(55,65,81,0.95);
+      color: #e5e7eb;
+    }
+
+    .log p span.tag.INFO {
+      background: rgba(59,130,246,0.9);
+    }
+    .log p span.tag.JOIN {
+      background: rgba(34,197,94,0.9);
+    }
+    .log p span.tag.GAME {
+      background: rgba(251,146,60,0.9);
+    }
+    .log p span.tag.ERR {
+      background: rgba(248,113,113,0.9);
+    }
+    .log p span.tag.SYS {
+      background: rgba(148,163,184,0.9);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .home-center {
+      text-align: center;
+    }
+
+    .home-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    @media (min-width: 640px) {
+      .home-buttons {
+        flex-direction: row;
+        justify-content: center;
+      }
+      .home-buttons .play-btn {
+        max-width: 220px;
+      }
+    }
+
+    .back-btn {
+      margin-bottom: 10px;
+      border-radius: 999px;
+      border: none;
+      padding: 8px 14px;
+      font-size: 13px;
+      cursor: pointer;
+      background: rgba(15,23,42,0.08);
+      color: #111827;
+    }
+
+    /* Overlay (oyun bitince çıkan modal) */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15,23,42,0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+    }
+
+    .overlay-inner {
+      background: #f9fafb;
+      border-radius: 24px;
+      padding: 24px 26px 20px;
+      max-width: 380px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(15,23,42,0.6);
+      text-align: center;
+    }
+
+    .overlay-inner h2 {
+      font-size: 20px;
+      margin-bottom: 10px;
+    }
+
+    .overlay-inner p {
+      font-size: 14px;
+      color: #4b5563;
+      margin-bottom: 6px;
+    }
+
+    .overlay-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    @media (min-width: 480px) {
+      .overlay-actions {
+        flex-direction: row;
+        justify-content: center;
+      }
+    }
+
+    .overlay-btn {
+      flex: 1;
+      border-radius: 999px;
+      border: none;
+      padding: 9px 14px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .overlay-btn-primary {
+      background: linear-gradient(90deg, #22c55e, #16a34a);
+      color: #fff;
+    }
+
+    .overlay-btn-primary:hover {
+      filter: brightness(1.05);
+    }
+
+    .overlay-btn-secondary {
+      background: #e5e7eb;
+      color: #111827;
+    }
+
+    .overlay-btn-secondary:hover {
+      filter: brightness(0.98);
+    }
+  </style>
+</head>
+<body>
+  <div class="outer">
+
+    <!-- ANA MENÜ -->
+    <section id="screen-home" class="panel">
+      <div class="home-center">
+        <div class="badge"><span></span>ONLINE LITE · 2 OYUNCU</div>
+        <h1>TIC-TAC-TOE</h1>
+        <p class="title-sub">İki kişilik, sıra tabanlı oyun. Arkadaşınla aynı odaya gir ve kapış.</p>
+        <p class="tagline">
+          Önce nasıl oynamak istediğini seç: yeni bir oda açabilir ya da var olan bir odaya katılabilirsin.
+        </p>
+
+        <h2 style="font-size:18px;margin-bottom:10px;">Seçimini Yap</h2>
+        <div class="home-buttons">
+          <button class="play-btn" id="goCreate">Oda Oluştur</button>
+          <button class="play-btn" id="goJoin">Odaya Katıl</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ODA OLUŞTUR EKRANI -->
+    <section id="screen-create" class="panel hidden">
+      <button class="back-btn" id="backFromCreate">← Ana menü</button>
+      <div class="badge"><span></span>ODA OLUŞTUR</div>
+      <h2>Yeni Oda Oluştur</h2>
+      <p>Oda kodunu, kullanıcı adını ve seri için tur sayısını seç. Kodunu arkadaşınla paylaştığında o da bu odaya katılabilir.</p>
+
+      <div class="form-row">
+        <div class="field-group">
+          <label for="createName">Kullanıcı Adın</label>
+          <input id="createName" type="text" placeholder="Örn. Lara" />
+        </div>
+        <div class="field-group">
+          <label for="createRoomId">Oda Kodu</label>
+          <input id="createRoomId" type="text" placeholder="Örn. ttt45" />
+        </div>
+      </div>
+
+      <div class="field-group" style="margin-top:10px;">
+        <label for="roundsSelect">Tur Sayısı</label>
+        <select id="roundsSelect">
+          <option value="1">Tek oyun (1 tur)</option>
+          <option value="3" selected>3 tur</option>
+          <option value="5">5 tur</option>
+          <option value="10">10 tur</option>
+        </select>
+      </div>
+
+      <button class="play-btn" id="createBtn">Oluştur ve Odaya Gir</button>
+
+      <div class="status-text" id="statusCreate">
+        Oda kodu, isim ve tur sayısını girip “Oluştur ve Odaya Gir” butonuna bas.
+      </div>
+    </section>
+
+    <!-- ODAYA KATIL EKRANI -->
+    <section id="screen-join" class="panel hidden">
+      <button class="back-btn" id="backFromJoin">← Ana menü</button>
+      <div class="badge"><span></span>ODAYA KATIL</div>
+      <h2>Var Olan Odaya Katıl</h2>
+      <p>Arkadaşının sana verdiği oda kodunu ve kendi kullanıcı adını girerek oyuna bağlan.</p>
+
+      <div class="form-row">
+        <div class="field-group">
+          <label for="joinName">Kullanıcı Adın</label>
+          <input id="joinName" type="text" placeholder="Örn. Mert" />
+        </div>
+        <div class="field-group">
+          <label for="joinRoomId">Oda Kodu</label>
+          <input id="joinRoomId" type="text" placeholder="Örn. ttt45" />
+        </div>
+      </div>
+
+      <button class="play-btn" id="joinBtn">Odaya Gir</button>
+
+      <div class="status-text" id="statusJoin">
+        Arkadaşının oda kodunu girip “Odaya Gir” butonuna bas.
+      </div>
+    </section>
+
+    <!-- OYUN EKRANI -->
+    <section id="screen-game" class="content hidden">
+      <!-- LEFT: info -->
+      <div>
+        <div class="badge"><span></span>ONLINE LITE · 2 OYUNCU</div>
+        <h1>TIC-TAC-TOE</h1>
+        <p class="title-sub">Aynı oda koduyla bağlanan iki oyuncu karşılıklı oynar. X her zaman ilk başlar.</p>
+
+        <div class="panel">
+          <h2>Oda Bilgileri</h2>
+          <p>Oyun başladıktan sonra oda kodu, taş ve skor bilgilerini buradan takip edebilirsin.</p>
+
+          <div class="bottom-strip">
+            <div class="pill">
+              Senin Taşın: <strong id="myMark">-</strong>
+            </div>
+            <div class="pill">
+              Oda: <strong id="roomLabel">-</strong>
+            </div>
+            <div class="pill">
+              Tur: <strong id="roundLabel">1</strong> / <strong id="maxRoundsLabel">1</strong>
+            </div>
+          </div>
+
+          <div class="status-text" id="statusText">
+            Oda oluşturuluyor veya odaya bağlanılıyor...
+          </div>
+          <div class="status-text" id="scoreText">
+            Skor: X = <strong id="scoreX">0</strong> · O = <strong id="scoreO">0</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Board & log -->
+      <div>
+        <div class="board-panel">
+          <div class="board-header">
+            <div>
+              <h3>Oyun Tahtası</h3>
+              <span>Hamlelerin her iki oyuncuda da anlık güncellenir.</span>
+            </div>
+            <div class="board-header-right">
+              <div id="hostBadge" class="pill-dark">Oda Sahibi: -</div>
+              <div id="leaveGame" class="back-link">← Oyundan çık</div>
+            </div>
+          </div>
+
+          <div class="board-wrapper">
+            <div class="board-grid" id="board">
+              <!-- JS ile doldurulacak -->
+            </div>
+          </div>
+
+          <!-- Büyük skor tablosu -->
+          <div class="scoreboard">
+            <div class="score-item">
+              <span class="label">X</span>
+              <span class="value" id="scoreXBig">0</span>
+            </div>
+            <div class="score-center">
+              <div>Tur <span id="roundLabelBig">1</span>/<span id="maxRoundsLabelBig">1</span></div>
+              <div>Oda: <span id="roomLabelBig">-</span></div>
+            </div>
+            <div class="score-item">
+              <span class="label">O</span>
+              <span class="value" id="scoreOBig">0</span>
+            </div>
+          </div>
+
+          <div class="board-footer">
+            <div class="pill-dark">
+              Sıra Bilgisi: <strong id="turnLabel">–</strong>
+            </div>
+            <div class="pill-dark">
+              Hamle Süresi: <strong id="moveTimerLabel">-</strong> sn
+            </div>
+            <div>Odada en fazla 2 oyuncu bulunabilir.</div>
+          </div>
+
+          <div class="log" id="log"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- OYUN BİTİŞ OVERLAY -->
+    <div id="endOverlay" class="overlay hidden">
+      <div class="overlay-inner">
+        <h2>Oyun Bitti</h2>
+        <p id="overlayResultText"></p>
+        <p id="overlayScoreText"></p>
+        <div id="overlayHostActions" class="overlay-actions">
+          <button id="overlayRematchBtn" class="overlay-btn overlay-btn-primary">
+            Yeni Seri Başlat
+          </button>
+          <button id="overlayExitBtn" class="overlay-btn overlay-btn-secondary">
+            Oyundan Çık
+          </button>
+        </div>
+        <p id="overlayNonHostHint" class="status-text" style="margin-top:8px;">
+          Oda sahibi yeni seri başlatabilir veya oyundan çıkabilir.
+        </p>
+      </div>
+    </div>
+
+  </div>
+
+<script>
+  const boardEl   = document.getElementById("board");
+  const logEl     = document.getElementById("log");
+  const myMarkEl  = document.getElementById("myMark");
+  const roomLabel = document.getElementById("roomLabel");
+  const turnLabel = document.getElementById("turnLabel");
+  const statusEl  = document.getElementById("statusText");
+  const statusCreate = document.getElementById("statusCreate");
+  const statusJoin   = document.getElementById("statusJoin");
+
+  const roundLabel     = document.getElementById("roundLabel");
+  const maxRoundsLabel = document.getElementById("maxRoundsLabel");
+  const scoreXEl       = document.getElementById("scoreX");
+  const scoreOEl       = document.getElementById("scoreO");
+  const scoreTextEl    = document.getElementById("scoreText");
+
+  const hostBadge      = document.getElementById("hostBadge");
+  const moveTimerLabel = document.getElementById("moveTimerLabel");
+
+  const scoreXBigEl       = document.getElementById("scoreXBig");
+  const scoreOBigEl       = document.getElementById("scoreOBig");
+  const roundLabelBig     = document.getElementById("roundLabelBig");
+  const maxRoundsLabelBig = document.getElementById("maxRoundsLabelBig");
+  const roomLabelBig      = document.getElementById("roomLabelBig");
+
+  const endOverlay          = document.getElementById("endOverlay");
+  const overlayResultText   = document.getElementById("overlayResultText");
+  const overlayScoreText    = document.getElementById("overlayScoreText");
+  const overlayHostActions  = document.getElementById("overlayHostActions");
+  const overlayNonHostHint  = document.getElementById("overlayNonHostHint");
+  const overlayRematchBtn   = document.getElementById("overlayRematchBtn");
+  const overlayExitBtn      = document.getElementById("overlayExitBtn");
+
+  const goCreateBtn   = document.getElementById("goCreate");
+  const goJoinBtn     = document.getElementById("goJoin");
+  const backFromCreate= document.getElementById("backFromCreate");
+  const backFromJoin  = document.getElementById("backFromJoin");
+  const leaveGameBtn  = document.getElementById("leaveGame");
+
+  const createNameInput = document.getElementById("createName");
+  const createRoomInput = document.getElementById("createRoomId");
+  const joinNameInput   = document.getElementById("joinName");
+  const joinRoomInput   = document.getElementById("joinRoomId");
+  const roundsSelect    = document.getElementById("roundsSelect");
+
+  const createBtn       = document.getElementById("createBtn");
+  const joinBtn         = document.getElementById("joinBtn");
+
+  const MOVE_TIME = 20;
+  let moveCountdownInterval = null;
+
+  // 9 hücreyi oluştur
+  for (let i = 0; i < 9; i++) {
+    const cell = document.createElement("div");
+    cell.className = "cell disabled";
+    cell.dataset.index = i;
+    cell.addEventListener("click", () => handleCellClick(i));
+    boardEl.appendChild(cell);
+  }
+
+  let ws = null;
+  let myMark = null;
+  let myTurn = false;
+  let roomId = null;
+  let pid = null;
+  let gameStarted = false;
+  let lastMode = null;     // "create" veya "join"
+  let amHost = false;
+
+  const WS_URL =
+    (location.protocol === "https:" ? "wss://" : "ws://") +
+    location.host +
+    "/ws/ttt";
+
+  function goto(id) {
+    ["screen-home","screen-create","screen-join","screen-game"].forEach(s => {
+      const el = document.getElementById(s);
+      if (!el) return;
+      if (s === id) el.classList.remove("hidden");
+      else el.classList.add("hidden");
+    });
+  }
+
+  // Ana menü butonları
+  goCreateBtn.addEventListener("click", () => {
+    goto("screen-create");
+  });
+
+  goJoinBtn.addEventListener("click", () => {
+    goto("screen-join");
+  });
+
+  backFromCreate.addEventListener("click", () => {
+    statusCreate.textContent = "Oda kodu, isim ve tur sayısını girip “Oluştur ve Odaya Gir” butonuna bas.";
+    goto("screen-home");
+  });
+
+  backFromJoin.addEventListener("click", () => {
+    statusJoin.textContent = "Arkadaşının oda kodunu girip “Odaya Gir” butonuna bas.";
+    goto("screen-home");
+  });
+
+  function log(tag, msg) {
+    const p = document.createElement("p");
+    const span = document.createElement("span");
+    span.className = "tag " + tag;
+    span.textContent = tag;
+    p.appendChild(span);
+    p.appendChild(document.createTextNode(msg));
+    logEl.appendChild(p);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function setBoardEnabled(enabled) {
+    document.querySelectorAll(".cell").forEach((c) => {
+      if (enabled) c.classList.remove("disabled");
+      else c.classList.add("disabled");
+    });
+  }
+
+  function resetBoard() {
+    document.querySelectorAll(".cell").forEach((c) => {
+      c.textContent = "";
+      c.classList.remove("x", "o");
+    });
+    turnLabel.textContent = "–";
+  }
+
+  function resetMoveTimer() {
+    if (moveCountdownInterval) {
+      clearInterval(moveCountdownInterval);
+      moveCountdownInterval = null;
+    }
+    moveTimerLabel.textContent = "-";
+  }
+
+  function startMoveTimer() {
+    resetMoveTimer();
+    let remaining = MOVE_TIME;
+    moveTimerLabel.textContent = remaining;
+    moveCountdownInterval = setInterval(() => {
+      remaining -= 1;
+      if (remaining <= 0) {
+        moveTimerLabel.textContent = "0";
+        clearInterval(moveCountdownInterval);
+        moveCountdownInterval = null;
+      } else {
+        moveTimerLabel.textContent = remaining;
+      }
+    }, 1000);
+  }
+
+  function leaveGame() {
+  // Eğer host'san ve bağlantı açık ise, önce server'a "host_exit" de
+  if (ws && ws.readyState === WebSocket.OPEN && amHost) {
+    try {
+      ws.send(JSON.stringify({ type: "host_exit" }));
+    } catch (e) {}
+  }
+
+  // Sonra kendi websocket'ini kapat
+  try { if (ws) ws.close(); } catch (e) {}
+
+  ws = null;
+  pid = null;
+  myMark = null;
+  myTurn = false;
+  roomId = null;
+  gameStarted = false;
+  amHost = false;
+
+  setBoardEnabled(false);
+  resetBoard();
+  resetMoveTimer();
+  myMarkEl.textContent = "-";
+  roomLabel.textContent = "-";
+  turnLabel.textContent = "–";
+  roundLabel.textContent = "1";
+  maxRoundsLabel.textContent = "1";
+  scoreXEl.textContent = "0";
+  scoreOEl.textContent = "0";
+
+  scoreXBigEl.textContent = "0";
+  scoreOBigEl.textContent = "0";
+  roundLabelBig.textContent = "1";
+  maxRoundsLabelBig.textContent = "1";
+  roomLabelBig.textContent = "-";
+
+  hostBadge.textContent = "Oda Sahibi: -";
+  logEl.innerHTML = "";
+  statusEl.textContent = "Oyundan çıktın.";
+  endOverlay.classList.add("hidden");
+
+  goto("screen-home");
+}
+
+
+  leaveGameBtn.addEventListener("click", leaveGame);
+
+  // ODA OLUŞTUR
+  createBtn.addEventListener("click", () => {
+    const name = createNameInput.value.trim() || "anon";
+    let room  = createRoomInput.value.trim();
+    if (!room) {
+      room = "ttt" + Math.floor(Math.random() * 900 + 100);
+      createRoomInput.value = room;
+    }
+    const rounds = parseInt(roundsSelect.value, 10) || 1;
+    connectToRoom(name, room, "create", { rounds });
+  });
+
+  // ODAYA KATIL
+  joinBtn.addEventListener("click", () => {
+    const name = joinNameInput.value.trim() || "anon";
+    const room = joinRoomInput.value.trim() || "ttt1";
+    connectToRoom(name, room, "join");
+  });
+
+  function connectToRoom(name, room, mode, extra) {
+    if (ws) {
+      try { ws.close(); } catch(e) {}
+      ws = null;
+    }
+
+    lastMode = mode;
+    setBoardEnabled(false);
+    resetBoard();
+    resetMoveTimer();
+    myMarkEl.textContent = "-";
+    roomLabel.textContent = room;
+    turnLabel.textContent = "–";
+    roundLabel.textContent = "1";
+    maxRoundsLabel.textContent = "1";
+    scoreXEl.textContent = "0";
+    scoreOEl.textContent = "0";
+
+    scoreXBigEl.textContent = "0";
+    scoreOBigEl.textContent = "0";
+    roundLabelBig.textContent = "1";
+    maxRoundsLabelBig.textContent = "1";
+    roomLabelBig.textContent = room;
+
+    hostBadge.textContent = "Oda Sahibi: -";
+    myTurn = false;
+    roomId = room;
+    gameStarted = false;
+    amHost = false;
+    endOverlay.classList.add("hidden");
+
+    if (mode === "create") {
+      statusCreate.textContent = "Sunucuya bağlanılıyor, oda oluşturuluyor...";
+    } else {
+      statusJoin.textContent = "Sunucuya bağlanılıyor, odaya bağlanılıyor...";
+    }
+
+    openWebSocket(name, room, mode, extra);
+  }
+
+  function openWebSocket(name, room, mode, extra) {
+    ws = new WebSocket(WS_URL);
+
+    ws.onopen = () => {
+      log("SYS", "WebSocket bağlantısı açıldı.");
+      const payload = {
+        type: "join",
+        roomId: room,
+        name,
+        mode
+      };
+      if (mode === "create" && extra && extra.rounds) {
+        payload.rounds = extra.rounds;
+      }
+      ws.send(JSON.stringify(payload));
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      const type = data.type;
+
+      if (type === "join_error") {
+        if (data.reason === "no_such_room") {
+          log("ERR", "Böyle bir oda yok.");
+          if (lastMode === "join") {
+            statusJoin.textContent = "Böyle bir oda yok. Oda kodunu kontrol et veya ilk sen oluştur.";
+          } else {
+            statusCreate.textContent = "Böyle bir oda yok. Tekrar dene.";
+          }
+        } else {
+          log("ERR", "Odaya katılamadın.");
+          if (lastMode === "join") {
+            statusJoin.textContent = "Odaya katılamadın.";
+          } else {
+            statusCreate.textContent = "Oda oluşturulamadı.";
+          }
+        }
+        setBoardEnabled(false);
+        return;
+      }
+      if (type === "host_left") {
+        const msg = data.msg || "Oda sahibi oyunu terk etti. Oda kapatılıyor.";
+        log("INFO", msg);
+        statusEl.textContent = msg;
+
+        // Host olmayan herkes bu mesajı alır → direkt oyundan çık
+        // (leaveGame ws.close çağıracağı için onclose da çalışacak, sorun değil)
+        if (!amHost) {
+          leaveGame();
+        }
+
+        return;
+      }
+
+if (type === "info") {
+  const msg = data.msg || "";
+  log("INFO", msg);
+  statusEl.textContent = msg;
+
+  // Host rematch başlatınca server bu mesajı atıyor.
+  // Bunu gördüğümüz anda herkes için overlay’i kapatıyoruz.
+  if (msg.startsWith("Oda sahibi yeni bir seri başlattı")) {
+    endOverlay.classList.add("hidden");
+  }
+
+  return;
+}
+
+
+      if (type === "error") {
+        log("ERR", data.msg || "Bilinmeyen hata");
+        statusEl.textContent = "Hata: " + (data.msg || "");
+        return;
+      }
+
+      if (type === "joined") {
+        pid = data.pid;
+        myMark = data.mark;
+        amHost = !!data.isHost;
+        myMarkEl.textContent = myMark;
+        log("JOIN", `Odaya girdiniz. Taşınız: ${myMark}${amHost ? " (Host)" : ""}`);
+
+        if (lastMode === "create") {
+          statusCreate.textContent = "Oda oluşturuldu, oyun ekranına geçiliyor...";
+        } else {
+          statusJoin.textContent = "Odaya başarıyla bağlandın, oyun ekranına geçiliyor...";
+        }
+
+        goto("screen-game");
+        statusEl.textContent = "Rakip bekleniyor veya oyun başlamak üzere...";
+        return;
+      }
+
+      if (type === "state") {
+
+        const board = data.board || [];
+        const turn  = data.turn;
+
+        const round     = data.round || 1;
+        const maxRounds = data.maxRounds || 1;
+        const scores    = data.scores || {};
+        const hostMark  = data.hostMark || null;
+
+        roundLabel.textContent     = round;
+        maxRoundsLabel.textContent = maxRounds;
+        scoreXEl.textContent = scores["X"] || 0;
+        scoreOEl.textContent = scores["O"] || 0;
+
+        roundLabelBig.textContent     = round;
+        maxRoundsLabelBig.textContent = maxRounds;
+        scoreXBigEl.textContent = scores["X"] || 0;
+        scoreOBigEl.textContent = scores["O"] || 0;
+        roomLabelBig.textContent = roomLabel.textContent;
+
+        if (hostMark) {
+          hostBadge.textContent = "Oda Sahibi: " + hostMark;
+        } else {
+          hostBadge.textContent = "Oda Sahibi: -";
+        }
+
+        const anyMove = board.some(v => v === "X" || v === "O");
+        if (!gameStarted && anyMove) {
+          gameStarted = true;
+          log("GAME", "Oyun başladı.");
+        }
+
+        // Board'ı çiz
+        document.querySelectorAll(".cell").forEach((c) => {
+          const idx = Number(c.dataset.index);
+          const v = board[idx];
+          if (v === "X") {
+            c.textContent = "X";
+            c.classList.add("x");
+            c.classList.remove("o");
+          } else if (v === "O") {
+            c.textContent = "O";
+            c.classList.add("o");
+            c.classList.remove("x");
+          } else {
+            c.textContent = "";
+            c.classList.remove("x", "o");
+          }
+        });
+
+        myTurn = (turn === myMark);
+        setBoardEnabled(myTurn);
+        turnLabel.textContent = turn || "–";
+
+        if (turn) {
+          startMoveTimer();
+        } else {
+          resetMoveTimer();
+        }
+
+        if (!anyMove) {
+          if (turn == null) {
+            statusEl.textContent = "Rakip bekleniyor...";
+          } else if (myTurn) {
+            statusEl.textContent = "Rakip bağlandığında ilk hamleyi sen yapacaksın.";
+          } else {
+            statusEl.textContent = "Oyun başlamak üzere, rakibin ilk hamleyi yapacak.";
+          }
+        } else {
+          if (myTurn) {
+            statusEl.textContent = "Sıra sende, bir kare seç.";
+          } else {
+            statusEl.textContent = "Rakibin hamlesini bekliyorsun...";
+          }
+        }
+
+        return;
+      }
+
+      if (type === "result") {
+        const raw       = data.msg || "Oyun bitti.";
+        const scores    = data.scores || {};
+        const round     = data.round || 1;
+        const maxRounds = data.maxRounds || 1;
+        const matchOver = !!data.matchOver;
+
+        scoreXEl.textContent = scores["X"] || 0;
+        scoreOEl.textContent = scores["O"] || 0;
+        roundLabel.textContent     = round;
+        maxRoundsLabel.textContent = maxRounds;
+
+        scoreXBigEl.textContent = scores["X"] || 0;
+        scoreOBigEl.textContent = scores["O"] || 0;
+        roundLabelBig.textContent     = round;
+        maxRoundsLabelBig.textContent = maxRounds;
+
+        let pretty = raw;
+        if (raw.includes("Kazanan: X")) {
+          pretty = "Kazanan: X";
+        } else if (raw.includes("Kazanan: O")) {
+          pretty = "Kazanan: O";
+        } else if (raw.includes("Berabere")) {
+          pretty = "Berabere!";
+        }
+
+        resetMoveTimer();
+
+        statusEl.innerHTML = "🎉 <strong>" + pretty + ` (Tur ${round}/${maxRounds})` + "</strong>";
+        log("GAME", pretty + ` (Tur ${round}/${maxRounds})`);
+
+        setBoardEnabled(false);
+        gameStarted = false;
+
+        if (matchOver) {
+          // Seri bitti → overlay göster
+          const finalMsg = `Nihai skor — X: ${scores["X"] || 0}, O: ${scores["O"] || 0}`;
+          overlayResultText.textContent = pretty + ` (Seri ${maxRounds} tur)`;
+          overlayScoreText.textContent = finalMsg;
+
+          if (amHost) {
+            overlayHostActions.classList.remove("hidden");
+            overlayNonHostHint.classList.add("hidden");
+          } else {
+            overlayHostActions.classList.add("hidden");
+            overlayNonHostHint.classList.remove("hidden");
+          }
+
+          endOverlay.classList.remove("hidden");
+        }
+
+        return;
+      }
+    };
+
+    ws.onclose = () => {
+      log("SYS", "Bağlantı kapandı.");
+      if (document.getElementById("screen-game").classList.contains("hidden")) {
+        if (lastMode === "create") {
+          statusCreate.textContent = "Bağlantı kapandı. Tekrar denemek için butona bas.";
+        } else if (lastMode === "join") {
+          statusJoin.textContent = "Bağlantı kapandı. Tekrar denemek için butona bas.";
+        }
+      } else {
+        statusEl.textContent = "Bağlantı kapandı. Yeniden bağlanmak için odaya yeniden gir.";
+      }
+      setBoardEnabled(false);
+      turnLabel.textContent = "–";
+      resetMoveTimer();
+      gameStarted = false;
+      endOverlay.classList.add("hidden");
+    };
+
+    ws.onerror = () => {
+      log("ERR", "WebSocket hatası oluştu.");
+    };
+  }
+
+  function handleCellClick(index) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    if (!myTurn) return;
+
+    ws.send(
+      JSON.stringify({
+        type: "move",
+        idx: index
+      })
+    );
+  }
+
+  overlayRematchBtn.addEventListener("click", () => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    if (!amHost) return;
+    ws.send(JSON.stringify({ type: "rematch" }));
+    endOverlay.classList.add("hidden");
+    statusEl.textContent = "Yeni seri başlatılıyor...";
+  });
+
+  overlayExitBtn.addEventListener("click", () => {
+    leaveGame();
+  });
+</script>
+
+</body>
+</html>

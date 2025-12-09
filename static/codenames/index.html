@@ -1,0 +1,426 @@
+<!doctype html>
+<html><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
+<title>Codenames (Lobby + Game UI)</title>
+<style>
+:root{--red:#e53935;--blue:#1e88e5;--muted:#6b7280}
+*{box-sizing:border-box}
+body{font-family:system-ui,Arial;margin:24px;background:#f6f7fb}
+.card{background:#fff;border:1px solid #e8e8ee;border-radius:14px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,.06);max-width:1100px;margin:auto}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.col{display:flex;flex-direction:column;gap:8px}
+input,select,button{padding:10px;border:1px solid #d1d5db;border-radius:10px;font-size:16px;background:#fff}
+.btn{cursor:pointer}
+.btn.primary{background:#111;color:#fff;border-color:#111}
+.btn.ghost{background:#fff}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.badge{padding:6px 10px;border-radius:9999px;border:1px solid #e5e7eb;background:#fff;font-weight:600}
+.pill{padding:4px 8px;border-radius:999px;border:1px solid #e5e7eb;background:#f9fafb;font-size:12px}
+.muted{color:var(--muted);font-size:13px}
+.hidden{display:none!important}
+
+.turnRed{color:#fff;background:var(--red)}
+.turnBlue{color:#fff;background:var(--blue)}
+header.top{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap}
+.counts{display:flex;gap:10px;align-items:center}
+.countRed{color:var(--red);font-weight:700}
+.countBlue{color:var(--blue);font-weight:700}
+
+/* Game board — senin stilin */
+.board{display:grid;grid-template-columns:repeat(5,minmax(140px,1fr));gap:10px;margin-top:12px}
+.tile{
+  padding:14px;border-radius:12px;text-align:center;min-height:72px;
+  display:flex;align-items:center;justify-content:center;font-weight:700;
+  border:1px solid #d0d0d0;user-select:none;transition:transform .05s ease, background-color .2s;
+}
+.tile:hover{transform:translateY(-1px)}
+.tile.disabled{opacity:1;cursor:not-allowed;filter:grayscale(0.3);}
+.tile.clickable{cursor:pointer}
+.tile.revealed{opacity:1}
+.red{background:#ffbcbc;color:#222}
+.blue{background:#bcd3ff;color:#222}
+.neut{background:#eaeaea;color:#222}
+.ass{background:#222;color:#fff}
+</style>
+</head>
+<body>
+
+<!-- GİRİŞ -->
+<section id="scr-home" class="card">
+  <div class="row">
+    <h2 style="margin:0">Codenames</h2>
+    <span class="pill">Sunucu: <b id="ipBadge"></b></span>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <button id="goCreate" class="btn primary">Oda Oluştur</button>
+    <button id="goJoin" class="btn ghost">Odaya Katıl</button>
+  </div>
+</section>
+
+<!-- ODA OLUŞTUR -->
+<section id="scr-create" class="card hidden">
+  <div class="row">
+    <button class="btn ghost" id="back1">← Geri</button>
+    <h3 style="margin:0">Oda Oluştur</h3>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <input id="roomCreate" placeholder="oda id">
+    <input id="nameCreate" placeholder="isim">
+    <button id="btnCreate" class="btn primary">Oluştur ve Gir</button>
+  </div>
+</section>
+
+<!-- ODAYA KATIL -->
+<section id="scr-join" class="card hidden">
+  <div class="row">
+    <button class="btn ghost" id="back2">← Geri</button>
+    <h3 style="margin:0">Odaya Katıl</h3>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <input id="roomJoin" placeholder="oda id">
+    <input id="nameJoin" placeholder="isim">
+    <button id="btnJoin" class="btn primary">Katıl</button>
+  </div>
+</section>
+
+<!-- LOBİ — sade, aynı stil -->
+<section id="scr-lobby" class="card hidden">
+  <div class="row">
+    <h3 style="margin:0">Lobi</h3>
+    <div id="lobbyMsg" class="muted"></div>
+  </div>
+  <div class="row" style="gap:20px">
+    <div class="col" style="flex:1">
+      <b>Oyuncular</b>
+      <div id="players" class="col"></div>
+    </div>
+    <div class="col" style="flex:1">
+      <b>Takım / Rol Seç</b>
+      <div class="row">
+        <select id="selTeam"><option value="red">Kırmızı</option><option value="blue">Mavi</option></select>
+        <select id="selRole"><option value="operative">Operatif</option><option value="spymaster">Spymaster</option></select>
+        <button id="saveTR" class="btn primary">Kaydet</button>
+      </div>
+      <div class="muted">Her takımda yalnız 1 spymaster olabilir.</div>
+      <button id="startGame" class="btn">Oyunu Başlat</button>
+    </div>
+  </div>
+</section>
+
+<!-- OYUN — birebir senin görünüm -->
+<section id="scr-game" class="card hidden">
+  <header class="top">
+    <div class="row">
+      <button id="leave" class="btn ghost">← Çık</button>
+      <span id="meBadge" class="pill"></span>
+      <span id="turnBadge" class="badge"></span>
+    </div>
+    <div class="counts">
+      <span class="countRed">🔴 <b id="countRed">9</b></span>
+      <span class="countBlue">🔵 <b id="countBlue">8</b></span>
+      <span class="pill">İpucu: <b id="clueNow">—</b></span>
+      <span class="pill">Kalan tahmin: <b id="guessLeft">0</b></span>
+    </div>
+  </header>
+
+  <div class="row" style="margin-top:10px">
+    <input id="clueWord" placeholder="İpucu (sadece spymaster)" style="flex:1">
+    <input id="clueCount" type="number" min="0" max="9" value="1" style="width:110px">
+    <button id="sendClue" class="btn">İpucu Gönder</button>
+    <button id="endTurn" class="btn">Turu Bitir</button>
+  </div>
+  <div class="muted" id="tipText" style="margin-top:6px"></div>
+  <div id="board" class="board"></div>
+</section>
+
+<script>
+const proto = location.protocol === "https:" ? "wss" : "ws";
+const WS_URL = proto + "://" + location.host + "/ws/codenames";
+
+document.getElementById("ipBadge").textContent = location.host;
+
+let ws = null;
+let pid = null;
+let roomId = null;
+let myTeam = null;
+let myRole = null;
+let currentTurn = "red";
+
+// === EKRAN YÖNETİMİ ===
+const scr = id => document.getElementById(id);
+const SCREENS = ["scr-home", "scr-create", "scr-join", "scr-lobby", "scr-game"];
+
+function goto(id) {
+  SCREENS.forEach(s => scr(s).classList.add("hidden"));
+  scr(id).classList.remove("hidden");
+}
+
+// Menü butonları
+document.getElementById("goCreate").onclick = () => goto("scr-create");
+document.getElementById("goJoin").onclick   = () => goto("scr-join");
+document.getElementById("back1").onclick    = () => goto("scr-home");
+document.getElementById("back2").onclick    = () => goto("scr-home");
+
+// === WEBSOCKET BAĞLANTISI ===
+function connect(room, name, mode = "join") {
+  ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({
+      type: "join",
+      roomId: room,
+      name,
+      mode         // "create" veya "join"
+    }));
+  };
+
+  ws.onclose = () => {
+    console.log("ws kapandı");
+  };
+
+  ws.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+
+    // ---- HATA DURUMLARI (oda yok, şifre vs.) ----
+    if (m.type === "join_error") {
+      if (m.reason === "no_such_room") {
+        alert("Böyle bir oda yok, önce oluşturman gerekiyor.");
+      } else if (m.reason === "wrong_password_or_key") {
+        alert("Şifre veya davet anahtarı hatalı.");
+      } else {
+        alert("Odaya katılamadın.");
+      }
+      goto("scr-home");
+      return;
+    }
+
+    if (m.type === "info") {
+      // sunucudan gelen bilgi mesajları (örn. start_game hatası)
+      alert(m.msg);
+      return;
+    }
+
+    // ---- LOBBY'YE GİRİLDİ ----
+    if (m.type === "joined") {
+      pid = m.pid;
+      goto("scr-lobby");
+      return;
+    }
+
+    // ---- LOBBY DURUMU (oyuncu listesi) ----
+    if (m.type === "lobby_state") {
+      const list = scr("players");
+      list.innerHTML = "";
+
+      Object.entries(m.state.players).forEach(([id, p]) => {
+        const row = document.createElement("div");
+        row.textContent =
+          `${p.name}${id === pid ? " (sen)" : ""} — ${p.team || "-"} / ${p.role || "-"}`;
+        list.appendChild(row);
+
+        if (id === pid) {
+          myTeam = p.team;
+          myRole = p.role;
+        }
+      });
+
+      scr("lobbyMsg").textContent =
+        "Başlatmak için her takımda 1 spymaster ve en az 1 oyuncu olmalı.";
+      return;
+    }
+
+    // ---- SADECE BENİM TAKIM/ROL GÜNCELLEMEM ----
+    if (m.type === "you") {
+      myTeam = m.team;
+      myRole = m.role;
+      return;
+    }
+
+    // ---- OYUN DURUMU (board, sıra, ipucu) ----
+    if (m.type === "state") {
+      if (m.you) {
+        myTeam = m.you.team;
+        myRole = m.you.role;
+      }
+
+      goto("scr-game");
+
+      currentTurn = m.state.turn;
+      const tb = scr("turnBadge");
+      tb.className = "badge " + (currentTurn === "red" ? "turnRed" : "turnBlue");
+      tb.textContent = "Sıra: " + currentTurn.toUpperCase();
+
+      scr("clueNow").textContent   = m.state.clue.word   || "—";
+      scr("guessLeft").textContent = m.state.guessesLeft;
+
+      updateCounts(m.state);
+      renderBoard(m.state);
+      setControls();
+      return;
+    }
+
+    // ---- OYUN BİTTİ ----
+    if (m.type === "result") {
+      alert(m.msg);
+      goto("scr-home");
+      return;
+    }
+  };
+}
+
+// === BUTONLAR (CREATE / JOIN / ROL / START) ===
+
+// Oda oluştur
+document.getElementById("btnCreate").onclick = () => {
+  const room = scr("roomCreate").value.trim();
+  const name = scr("nameCreate").value.trim() || "anon";
+  if (!room) return;
+  roomId = room;
+  connect(room, name, "create");
+};
+
+// Odaya katıl
+document.getElementById("btnJoin").onclick = () => {
+  const room = scr("roomJoin").value.trim();
+  const name = scr("nameJoin").value.trim() || "anon";
+  if (!room) return;
+  roomId = room;
+  connect(room, name, "join");
+};
+
+// Takım / rol kaydet
+document.getElementById("saveTR").onclick = () => {
+  const team = scr("selTeam").value;
+  const role = scr("selRole").value;
+  if (!ws) return;
+  ws.send(JSON.stringify({ type: "set_team_role", team, role }));
+};
+
+// Oyunu başlat
+document.getElementById("startGame").onclick = () => {
+  if (!ws) return;
+  ws.send(JSON.stringify({ type: "start_game" }));
+};
+
+// Oyundan çık
+scr("leave").onclick = () => {
+  try { ws && ws.close(); } catch (e) {}
+  ws = null;
+  pid = null;
+  roomId = null;
+  myTeam = null;
+  myRole = null;
+  goto("scr-home");
+};
+
+// === OYUN LOGİĞİ (board, ipucu, kontroller) ===
+
+function updateCounts(state) {
+  const totalR = state.colors.filter(c => c === "red").length;
+  const totalB = state.colors.filter(c => c === "blue").length;
+  const revR = state.revealed.filter(i => state.colors[i] === "red").length;
+  const revB = state.revealed.filter(i => state.colors[i] === "blue").length;
+  scr("countRed").textContent  = totalR - revR;
+  scr("countBlue").textContent = totalB - revB;
+}
+
+function canGuess() {
+  return myRole === "operative" && myTeam === currentTurn;
+}
+
+function canClue() {
+  return myRole === "spymaster" && myTeam === currentTurn;
+}
+
+function setControls() {
+  scr("meBadge").textContent =
+    `Sen: ${myTeam ? myTeam.toUpperCase() : "-"} / ${myRole || "-"}`;
+
+  const isMyTurn = myTeam === currentTurn;
+  const iCanClue = canClue();
+
+  const clueWordInput  = scr("clueWord");
+  const clueCountInput = scr("clueCount");
+  const sendClueButton = scr("sendClue");
+
+  if (iCanClue) {
+    clueWordInput.classList.remove("hidden");
+    clueCountInput.classList.remove("hidden");
+    sendClueButton.classList.remove("hidden");
+  } else {
+    clueWordInput.classList.add("hidden");
+    clueCountInput.classList.add("hidden");
+    sendClueButton.classList.add("hidden");
+  }
+
+  scr("endTurn").disabled = !isMyTurn;
+
+  scr("tipText").textContent = iCanClue
+    ? "Takımına bir ipucu ve tahmin sayısı ver."
+    : (canGuess()
+        ? "Takımının ipucuna göre bir kelime seç."
+        : "Şu an rakip takımın sırası.");
+}
+
+function renderBoard(state) {
+  const boardEl = scr("board");
+  boardEl.innerHTML = "";
+
+  const bg = { red: "#ffbcbc", blue: "#bcd3ff", neut: "#eaeaea", ass: "#222" };
+  const fg = { ass: "#fff" };
+
+  state.words.forEach((w, i) => {
+    const d = document.createElement("div");
+    d.className = "tile";
+
+    const revealed = state.revealed.includes(i);
+    let colorKey = null;
+
+    if (revealed) {
+      colorKey = state.colors[i];
+    }
+    if (myRole === "spymaster") {
+      colorKey = state.colors[i];
+    }
+    if (colorKey) {
+      d.style.background = bg[colorKey];
+      d.style.color = fg[colorKey] || "#222";
+    }
+
+    d.textContent = w;
+
+    if (canGuess() && !revealed) {
+      d.classList.add("clickable");
+      d.onclick = () => {
+        ws.send(JSON.stringify({ type: "guess", idx: i }));
+      };
+    } else {
+      d.classList.add("disabled");
+    }
+
+    boardEl.appendChild(d);
+  });
+}
+
+// İpucu gönder
+scr("sendClue").onclick = () => {
+  if (!canClue()) return;
+  const word  = scr("clueWord").value.trim();
+  const count = parseInt(scr("clueCount").value, 10) || 0;
+  ws.send(JSON.stringify({ type: "clue", word, count }));
+  scr("clueWord").value = "";
+};
+
+// Turu bitir
+scr("endTurn").onclick = () => {
+  if (myTeam === currentTurn && ws) {
+    ws.send(JSON.stringify({ type: "end_turn" }));
+  }
+};
+</script>
+
+</body></html>

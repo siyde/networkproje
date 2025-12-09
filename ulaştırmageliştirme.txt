@@ -1,0 +1,67 @@
+a) 
+LobiSunucusuAnahtar.pem dosyasının olduğu klasörde (veya anahtarın bulunduğu dizine gidin) powershell ve linux açın
+ssh -i LobiSunucusuAnahtar.pem ubuntu@13.53.148.181 #bununla sanal bilgisayara bağlanıyoruz
+permisson denied hatası alırsanız:
+chmod 400 LobiSunucusuAnahtar.pem #yazıp tekrar üstteki kodu yazın
+
+b) 
+genel yapı(TTT şu an yok sadece kart olarak gözüküyor):
+/home/ubuntu/pictionary/
+│
+├── server.py                      # Tüm oyunların (Pictionary, Codenames, TTT) backend'i
+│
+└── /var/www/gamesite/games/
+     ├── pictionary/               # Pictionary HTML istemcisi
+     ├── codenames/                # Codenames HTML istemcisi
+     └── ttt/                      # TicTacToe HTML istemcisi
+
+c) 
+dosya düzenleme sudo nano ile:
+sever.py için
+cd ~/pictionary
+sudo nano server.py
+
+codenames in html dosyası için
+sudo nano /var/www/gamesite/games/codenames/index.html
+
+pictionary html dosyası için
+sudo nano /var/www/gamesite/games/pictionary/index.html
+
+d) 
+!!!!!!!!!!!!!!değişikliklerden sonra UNUTMAYIN!!!!!!!!!!!!!
+Ctrl + O → Enter (kaydet)
+Ctrl + X (çıkış)
+
+sadece index.html leri değiştirdiyseniz bunu yaz:
+sudo nginx -t && sudo systemctl reload nginx 
+
+server.py yi değiştirdiyseniz serverı tekrar sürekli açık yapmak için
+sudo systemctl restart pictionary
+sudo systemctl status pictionary #----> burada active(running) yazmalı 
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+e)
+yeni oyun yapacağın zaman mesela wordchain olsun bu şekilde dosya oluşturabilirsiniz ayrı kalmasın
+sudo mkdir /var/www/gamesite/games/wordchain
+sudo nano /var/www/gamesite/games/wordchain/index.html
+
+f)
+Bu sistemin altyapısı:
+FastAPI (Python) ile WebSocket tabanlı çok oyunculu oyun sunucusu
+Nginx ile static dosya servisi
+Systemd servis olarak otomatik başlatma
+AWS EC2 (Ubuntu 22.04) üzerinde çalışıyor
+
+g)
+AWS giriş(büyük ihtimalle ihtiyacınız olmaz):
+root girişi
+suimdat2002@gmail.com 
+NetworkProje123
+
+EC2 Public IP: 13.53.148.181
+http adresimiz:
+http://13.53.148.181/
+
+
+cat dosya yolu //kodu kopyalamak için

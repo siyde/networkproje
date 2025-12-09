@@ -1,0 +1,403 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Pictionary Lite</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root{--gap:16px}
+    *{box-sizing:border-box}
+    body{font-family:system-ui,Arial;margin:var(--gap);background:#f7f7fb;color:#222}
+    .hidden{display:none!important}
+    .card{background:#fff;border:1px solid #e5e5ef;border-radius:12px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+    .btn{padding:10px 14px;border-radius:10px;border:1px solid #ccc;background:#fff;cursor:pointer}
+    .btn.primary{background:#111;color:#fff;border-color:#111}
+    .row{display:flex;gap:var(--gap);flex-wrap:wrap}
+    input,button{font-size:16px}
+    input{padding:10px;border:1px solid #d7d7e2;border-radius:10px;width:100%}
+    label{font-size:14px;color:#555}
+    #gameLayout{display:flex;gap:var(--gap);flex-wrap:wrap}
+    #left{display:flex;flex-direction:column;gap:var(--gap)}
+    #toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    #c{border:1px solid #ddd;touch-action:none;border-radius:10px;background:#fff}
+    #sidebar{min-width:280px;max-width:380px;display:flex;flex-direction:column;gap:8px;flex:1}
+    #log{height:240px;overflow:auto;border:1px solid #eee;padding:8px;white-space:pre-wrap;background:#fafafa;border-radius:8px}
+    #players{border:1px solid #eee;padding:8px;border-radius:8px;background:#fff}
+    .me{font-weight:bold}
+    #word{font-size:20px;letter-spacing:3px}
+    #invite{border:1px dashed #aaa;padding:8px;background:#fffff5;border-radius:8px}
+    #error,#errorJoin{color:#b00020;margin-top:8px}
+    #timer{font-weight:600}
+    .muted{color:#666;font-size:12px}
+    .back{margin-right:auto}
+    /* Kelime seçimi modalı */
+    #choiceModal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:9999}
+  </style>
+</head>
+<body>
+
+  <!-- EKRAN 0: ANA MENÜ -->
+  <section id="screen-home" class="card" style="max-width:560px;margin:0 auto;text-align:center">
+    <h2 style="margin-top:0">Pictionary Lite</h2>
+    <p class="muted">Bir seçenek seç:</p>
+    <div class="row" style="justify-content:center">
+      <button id="goCreate" class="btn primary">Oda Oluştur</button>
+      <button id="goJoin"   class="btn">Odaya Katıl</button>
+    </div>
+  </section>
+
+  <!-- EKRAN 1: ODA OLUŞTUR -->
+  <section id="screen-create" class="card hidden" style="max-width:780px;margin:0 auto">
+    <div class="row" style="align-items:center">
+      <button class="btn back" id="backFromCreate">← Geri</button>
+      <h3 style="margin:0">Oda Oluştur</h3>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div style="flex:1;min-width:220px">
+        <label>Oda ID</label>
+        <input id="roomCreate" placeholder="örn: sinif101">
+      </div>
+      <div style="flex:1;min-width:220px">
+        <label>İsim</label>
+        <input id="nameCreate" placeholder="örn: ali">
+      </div>
+      <div style="flex:1;min-width:220px">
+        <label>Şifre <span class="muted">(opsiyonel — odanın şifresi olur)</span></label>
+        <input id="pwdCreate" placeholder="yeni oda şifresi">
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button id="btnCreate" class="btn primary">Oluştur ve Gir</button>
+    </div>
+    <div id="error" class="hidden"></div>
+  </section>
+
+  <!-- EKRAN 2: ODAYA KATIL -->
+  <section id="screen-join" class="card hidden" style="max-width:780px;margin:0 auto">
+    <div class="row" style="align-items:center">
+      <button class="btn back" id="backFromJoin">← Geri</button>
+      <h3 style="margin:0">Odaya Katıl</h3>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div style="flex:1;min-width:220px">
+        <label>Oda ID</label>
+        <input id="roomJoin" placeholder="örn: sinif101">
+      </div>
+      <div style="flex:1;min-width:220px">
+        <label>İsim</label>
+        <input id="nameJoin" placeholder="örn: ayşe">
+      </div>
+      <div style="flex:1;min-width:220px">
+        <label>Şifre <span class="muted">(oda şifresi varsa)</span></label>
+        <input id="pwdJoin" placeholder="oda şifresi">
+      </div>
+    </div>
+    <p class="muted" style="margin:8px 0 0">Davet linkiyle geldiysen URL’de <code>?room</code> ve <code>?key</code> parametreleri olur; şifre gerekmez.</p>
+    <div class="row" style="margin-top:12px">
+      <button id="btnJoin" class="btn primary">Katıl</button>
+    </div>
+    <div id="errorJoin" class="hidden"></div>
+  </section>
+
+  <!-- EKRAN 3: OYUN -->
+  <section id="screen-game" class="hidden">
+    <div id="gameLayout">
+      <div id="left" style="flex:2;min-width:660px">
+        <div class="card">
+          <div id="toolbar">
+            <button id="leave" class="btn">← Çıkış</button>
+            <span id="roomBadge" class="muted"></span>
+            <span id="timer"></span>
+          </div>
+        </div>
+
+        <div class="card">
+          <canvas id="c" width="800" height="560"></canvas>
+          <div id="drawerTools" class="row hidden" style="margin-top:8px">
+            <label>Kalınlık <input id="w" type="range" min="1" max="18" value="4" style="width:200px"></label>
+            <input id="color" type="color" value="#000000">
+            <button id="clearBtn" class="btn">Temizle</button>
+            <label><input type="checkbox" id="eraser"> Silgi</label>
+          </div>
+        </div>
+
+        <div id="invite" class="card hidden">
+          <div><b>Davet linki:</b></div>
+          <input id="inviteLink" style="width:100%" readonly>
+          <div class="row">
+            <button id="copyInvite" class="btn">Kopyala</button>
+            <span class="muted">Bu linkle gelenler şifresiz girebilir.</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="sidebar" style="flex:1;min-width:280px">
+        <div class="card"><div id="word">_ _ _ _</div></div>
+        <div id="players" class="card"></div>
+        <div class="card">
+          <div id="log"></div>
+          <form id="chatForm" class="row" style="margin-top:8px">
+            <input id="chatInput" placeholder="tahmin yaz..." autocomplete="off" style="flex:1">
+            <button class="btn">Gönder</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Kelime seçimi modal -->
+  <div id="choiceModal" class="hidden">
+    <div class="card" style="max-width:480px;width:90%;text-align:center">
+      <h3 style="margin-top:0">Bir kelime seç</h3>
+      <div id="choicesWrap" class="row" style="justify-content:center;margin:8px 0"></div>
+      <div id="choiceCountdown" class="muted">10</div>
+    </div>
+  </div>
+
+<script>
+/* ================== AYAR ================== */
+/* Nginx ile 80’den servis: */
+const proto = location.protocol === "https:" ? "wss" : "ws";
+const WS_URL = proto + "://" + location.host + "/ws/pictionary";
+
+/* Nginx yoksa (doğrudan 8000): */
+// const WS_URL = "ws://EC2_PUBLIC_IP:8000/ws";
+
+/* ================ DURUMLAR ================ */
+let ws, pid=null, drawer=null, started=false, inviteKey=null, currentRoom=null;
+const cv=document.getElementById('c'), ctx=cv?.getContext('2d');
+let drawing=false, px=0, py=0;
+const logEl=document.getElementById('log');
+const playersEl=document.getElementById('players');
+const timerEl=document.getElementById('timer');
+const wordEl=document.getElementById('word');
+const drawerTools=document.getElementById('drawerTools');
+const inviteBox=document.getElementById('invite');
+const inviteLinkEl=document.getElementById('inviteLink');
+const eraser=document.getElementById('eraser');
+const errCreate=document.getElementById('error');
+const errJoin=document.getElementById('errorJoin');
+/* Kelime seçimi modal elemanları */
+let choiceTimer=null;
+const choiceModal=document.getElementById('choiceModal');
+const choicesWrap=document.getElementById('choicesWrap');
+const choiceCountdown=document.getElementById('choiceCountdown');
+
+/* ================ UI HELPERS ================ */
+const show = id => document.getElementById(id).classList.remove('hidden');
+const hide = id => document.getElementById(id).classList.add('hidden');
+function goto(id){ ["screen-home","screen-create","screen-join","screen-game"].forEach(hide); show(id); }
+function log(t){ const atBottom=logEl.scrollTop+logEl.clientHeight>=logEl.scrollHeight-5; logEl.textContent+=t+"\n"; if(atBottom) logEl.scrollTop=logEl.scrollHeight; }
+function drawStroke(s){ ctx.lineCap="round"; ctx.lineJoin="round"; ctx.beginPath(); ctx.moveTo(s.x0,s.y0); ctx.lineTo(s.x1,s.y1); ctx.lineWidth=s.w||2; ctx.strokeStyle=s.c||"#000"; ctx.stroke(); }
+function clearCanvas(){ ctx.clearRect(0,0,cv.width,cv.height); }
+function setDrawerUI(isDrawer){ isDrawer?show('drawerTools'):hide('drawerTools'); cv.style.cursor=isDrawer?'crosshair':'not-allowed'; }
+function redrawAll(strokes){ clearCanvas(); (strokes||[]).forEach(drawStroke); }
+function renderPlayers(players){
+  let html="<b>Oyuncular</b><br>";
+  Object.entries(players).sort((a,b)=>b[1].score-a[1].score).forEach(([id,p])=>{
+    const me=id===pid?" me":""; const crown=id===drawer?" 👑":""; html+=`<div class="${me}">${p.name}${crown} — ${p.score}</div>`;
+  });
+  playersEl.innerHTML=html;
+}
+function send(o){ if(ws && ws.readyState===1) ws.send(JSON.stringify(o)); }
+function randomRoomId(){ return 'room-' + Math.random().toString(36).slice(2,8); }
+
+/* ================ URL AUTOFILL (join ekranı için) ================ */
+(function autofill(){
+  const q = new URLSearchParams(location.search);
+  if(q.get("room")) document.getElementById('roomJoin').value = q.get("room");
+  if(q.get("name")) document.getElementById('nameJoin').value = q.get("name");
+  if(q.get("pwd"))  document.getElementById('pwdJoin').value  = q.get("pwd");
+  if(q.get("key"))  inviteKey = q.get("key");
+})();
+
+/* ================ NAVIGATION ================ */
+document.getElementById('goCreate').onclick = ()=> goto('screen-create');
+document.getElementById('goJoin').onclick   = ()=> goto('screen-join');
+document.getElementById('backFromCreate').onclick = ()=> goto('screen-home');
+document.getElementById('backFromJoin').onclick   = ()=> goto('screen-home');
+
+/* ================ CONNECT & JOIN ================ */
+function connectAndJoin({roomId, name, password, inviteKeyParam, mode}){
+  ws = new WebSocket(WS_URL);
+  ws.onopen = ()=> send({type:"join", roomId, name, password, inviteKey: inviteKeyParam, mode: mode || "join"});
+  ws.onclose = ()=> log("Bağlantı kapandı");
+  ws.onerror = ()=> {
+    const target = inviteKeyParam ? errJoin : errCreate;
+    target.textContent="Bağlantı hatası.";
+    target.classList.remove('hidden');
+  };
+
+  ws.onmessage = (e)=>{
+    const msg=JSON.parse(e.data);
+
+        if(msg.type==="join_error"){
+                const target = inviteKeyParam ? errJoin : errCreate;
+        if(msg.reason === "wrong_password_or_key"){
+                target.textContent = "❌ Şifre veya davet anahtarı hatalı.";
+        }
+        else if(msg.reason === "no_such_room"){
+                target.textContent = "❌ Böyle bir oda yok.";
+        }
+        else {
+                target.textContent = "Katılamadın.";
+        }
+        target.classList.remove('hidden');
+        return;
+        }
+
+    if(msg.type==="joined"){
+      goto('screen-game');
+      pid=msg.pid; currentRoom=msg.room || roomId;
+      inviteKey = msg.inviteKey || null;
+      document.getElementById('roomBadge').textContent = `Oda: ${currentRoom}`;
+      log("Bağlandın: "+pid);
+
+      if(inviteKey){
+        const base = location.origin.startsWith("http") ? location.origin + location.pathname : "http://EC2_PUBLIC_IP/";
+        const link = `${base}?room=${encodeURIComponent(currentRoom)}&key=${encodeURIComponent(inviteKey)}`;
+        inviteLinkEl.value = link;
+        document.getElementById('invite').classList.remove('hidden');
+      }
+      return;
+    }
+
+    if(msg.type==="choose_word"){
+      // Bu mesaj yalnızca çizen kişinin tarayıcısına gelir (sunucu öyle gönderiyor)
+      showChoiceModal(msg.choices, msg.timeout||10);
+      return;
+    }
+
+    if(msg.type==="system"){ renderPlayers(msg.players); log(msg.msg); }
+    if(msg.type==="state"){
+      renderPlayers(msg.players); drawer=msg.drawer;
+      wordEl.textContent=msg.word||"";
+      started=msg.started;
+      setDrawerUI(pid===drawer);
+      timerEl.textContent=msg.secondsLeft?`⏱ ${msg.secondsLeft}s`:"";
+      if(msg.strokes) redrawAll(msg.strokes);
+    }
+    if(msg.type==="round_start"){ drawer=msg.drawer; setDrawerUI(pid===drawer); log("Yeni tur! Çizen: "+(drawer===pid?"SEN":drawer)); }
+    if(msg.type==="stroke"){ drawStroke(msg.stroke); }
+    if(msg.type==="clear"){ clearCanvas(); }
+    if(msg.type==="chat"){ log(`${msg.name}: ${msg.text}`); }
+    if(msg.type==="guess"){ if(msg.correct) log(`✅ ${msg.name} doğru bildi!`); }
+    if(msg.type==="round_end"){
+      if(msg.result==="timeup") log(`⏰ Süre bitti! Kelime: ${msg.word}`);
+      if(msg.result==="guessed") log(`🎉 ${msg.winner} kazandı! Kelime: ${msg.word}`);
+      hideChoiceModal();
+    }
+    if(msg.type==="info"){
+      log(msg.msg);
+      if(/Kelime seçildi/i.test(msg.msg) || /otomatik/i.test(msg.msg)) hideChoiceModal();
+    }
+  };
+}
+
+/* OLUŞTUR */
+document.getElementById('btnCreate').onclick=()=>{
+  let roomId = document.getElementById('roomCreate').value.trim();
+  const name = document.getElementById('nameCreate').value.trim() || "anon";
+  const pwd  = document.getElementById('pwdCreate').value.trim() || null;
+  errCreate.classList.add('hidden');
+  if(!roomId){
+    roomId = randomRoomId();
+    document.getElementById('roomCreate').value = roomId;
+  }
+  connectAndJoin({
+    roomId,
+    name,
+    password: pwd,
+    inviteKeyParam: null,
+    mode: "create"
+  });
+};
+
+/* KATIL */
+document.getElementById('btnJoin').onclick=()=>{
+  const roomId = document.getElementById('roomJoin').value.trim();
+  const name   = document.getElementById('nameJoin').value.trim() || "anon";
+  const pwd    = document.getElementById('pwdJoin').value.trim() || null;
+  errJoin.classList.add('hidden');
+  if(!roomId){
+    errJoin.textContent = "Lütfen oda ID gir.";
+    errJoin.classList.remove('hidden');
+    return;
+  }
+  connectAndJoin({
+    roomId,
+    name,
+    password: pwd,
+    inviteKeyParam: inviteKey,
+    mode: "join"
+  });
+};
+
+/* LEAVE → geri ana menü */
+document.getElementById('leave').onclick=()=>{
+  try{ send({type:"leave"}); }catch(e){}
+  try{ ws.close(); }catch(e){}
+  goto('screen-home');
+  // temizle
+  logEl.textContent=""; clearCanvas(); playersEl.innerHTML=""; wordEl.textContent="_ _ _ _"; timerEl.textContent="";
+  pid=null; drawer=null; started=false; currentRoom=null;
+};
+
+/* ÇİZİM */
+document.getElementById('clearBtn').onclick=()=> send({type:"clear"});
+cv.addEventListener('pointerdown',(e)=>{
+  if(pid!==drawer) return;
+  drawing=true; const r=cv.getBoundingClientRect(); px=e.clientX-r.left; py=e.clientY-r.top;
+});
+cv.addEventListener('pointermove',(e)=>{
+  if(!drawing||pid!==drawer) return;
+  const r=cv.getBoundingClientRect();
+  const x=e.clientX-r.left, y=e.clientY-r.top;
+  const w=parseInt(document.getElementById('w').value,10);
+  const useEraser = eraser.checked;
+  const color = useEraser ? "#FFFFFF" : document.getElementById('color').value;
+  drawStroke({x0:px,y0:py,x1:x,y1:y,w,c:color});
+  send({type:"stroke",x0:px,y0:py,x1:x,y1:y,w,c:color});
+  px=x; py=y;
+});
+["pointerup","pointerleave","pointercancel"].forEach(ev=>cv.addEventListener(ev,()=>drawing=false));
+
+/* CHAT */
+document.getElementById('chatForm').addEventListener('submit',(e)=>{
+  e.preventDefault();
+  const inp=document.getElementById('chatInput');
+  const t=inp.value.trim(); if(!t) return;
+  send({type:"chat", text:t}); inp.value="";
+});
+
+/* DAVET KOPYALA */
+document.getElementById('copyInvite').onclick=()=>{
+  inviteLinkEl.select(); document.execCommand('copy'); log("📋 Davet linki kopyalandı.");
+};
+
+/* ===== Kelime seçimi modal fonksiyonları ===== */
+function showChoiceModal(choices, timeoutSec){
+  choicesWrap.innerHTML="";
+  (choices||[]).forEach(w=>{
+    const b=document.createElement('button');
+    b.className='btn primary';
+    b.textContent=w;
+    b.onclick=()=>{ send({type:"choose_word", choice:w}); hideChoiceModal(); };
+    choicesWrap.appendChild(b);
+  });
+  let t = timeoutSec||10;
+  choiceCountdown.textContent=t;
+  if(choiceTimer) clearInterval(choiceTimer);
+  choiceTimer=setInterval(()=>{
+    t--; choiceCountdown.textContent=t;
+    if(t<=0){ clearInterval(choiceTimer); hideChoiceModal(); }
+  },1000);
+  choiceModal.classList.remove('hidden');
+}
+function hideChoiceModal(){
+  if(choiceTimer) clearInterval(choiceTimer);
+  choiceModal.classList.add('hidden');
+}
+</script>
+</body>
+</html>
