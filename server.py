@@ -14,10 +14,6 @@ app.add_middleware(CORSMMiddleware := CORSMiddleware,
                    allow_headers=["*"],
                    allow_methods=["*"])
 
-# ====== Statik Dosyalar (HTML Oyunlar) ======
-BASE_DIR = os.path.dirname(__file__)
-STATIC_DIR = os.path.join(BASE_DIR, "static")
-app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
 
 # ==========================
 # Pictionary (çok odalı)
@@ -32,18 +28,26 @@ PIC_WORDS = [
     "fener","kitap","okul","yıldız","kamera","kule","şehir","çiçek","gözlük","çorap"
 ]
 
+# İstersen burada sabit toplam tur sayısı tanımlayabilirsin (sadece görsel amaçlı)
+PIC_TOTAL_ROUNDS = 10
+
 pic_rooms: Dict[str, dict] = {}
 
-def mask_word(w): return " ".join(["_" if ch!=" " else " " for ch in w])
+def mask_word(w):
+    # Kelimeyi "_ _ _" formatına çevir
+    return " ".join(["_" if ch != " " else " " for ch in w])
 
-async def ws_send(ws, payload): await ws.send_text(json.dumps(payload))
+async def ws_send(ws, payload):
+    await ws.send_text(json.dumps(payload))
 
 async def pic_broadcast(room, payload):
     msg = json.dumps(payload)
-    dead=[]
+    dead = []
     for ws in list(room["clients"]):
-        try: await ws.send_text(msg)
-        except: dead.append(ws)
+        try:
+            await ws.send_text(msg)
+        except Exception:
+            dead.append(ws)
     for ws in dead:
         room["clients"].discard(ws)
         pid = getattr(ws, "state_pid", None)
@@ -67,105 +71,165 @@ def pic_room(room_id):
             "seconds_left": 0,
             "round_task": None,
             "password": None,
-            "invite_key": None
+            "invite_key": None,
+            # yeni alanlar
+            "round_index": 0,
+            "total_rounds": PIC_TOTAL_ROUNDS,
+            "hint_mask": None,
+            "hint_used": False,
         }
     return pic_rooms[room_id]
 
 def pic_next_drawer(room):
-    if not room["drawer_order"]: return None
+    if not room["drawer_order"]:
+        return None
     pid = room["drawer_order"][room["drawer_idx"] % len(room["drawer_order"])]
     room["drawer_idx"] = (room["drawer_idx"] + 1) % len(room["drawer_order"])
     return pid
 
 async def pic_state_push(room_id):
     room = pic_rooms.get(room_id)
-    if not room: return
+    if not room:
+        return
+
     for ws in list(room["clients"]):
         pid = getattr(ws, "state_pid", None)
+
+        # Kelime görünümü: çizen tam kelimeyi görür, diğerleri maske / ipucu maskesi
         if room["chosen"] and room["word"]:
-            word_view = room["word"] if pid == room.get("current_drawer") else mask_word(room["word"])
+            if pid == room.get("current_drawer"):
+                word_view = room["word"]
+            else:
+                # ipucu maskesi varsa onu kullan, yoksa klasik mask_word
+                if room.get("hint_mask"):
+                    word_view = room["hint_mask"]
+                else:
+                    word_view = mask_word(room["word"])
         else:
-            word_view = "(kelime seçiliyor)" if pid == room.get("current_drawer") else ""
+            if pid == room.get("current_drawer"):
+                word_view = "(kelime seçiliyor)"
+            else:
+                word_view = ""
+
         try:
             await ws.send_text(json.dumps({
-                "type":"state",
+                "type": "state",
                 "players": room["players"],
                 "drawer": room.get("current_drawer"),
                 "word": word_view,
-                "secondsLeft": room.get("seconds_left",0),
+                "secondsLeft": room.get("seconds_left", 0),
                 "strokes": room["strokes"],
-                "started": room["started"]
+                "started": room["started"],
+                "round": room.get("round_index", 1),
+                "totalRounds": room.get("total_rounds") or 0,
+                "hintUsed": room.get("hint_used", False),
             }))
-        except:
+        except Exception:
             room["clients"].discard(ws)
 
 async def pic_start_round(room_id):
     room = pic_rooms.get(room_id)
     if not room or len(room["players"]) < 2:
-        room["started"]=False; room["word"]=None; room["strokes"].clear(); room["seconds_left"]=0
-        room["choices"]=None; room["chosen"]=False
-        await pic_broadcast(room, {"type":"info","msg":"Yeni tur için en az 2 oyuncu gerekli."})
-        await pic_state_push(room_id); return
+        room["started"] = False
+        room["word"] = None
+        room["strokes"].clear()
+        room["seconds_left"] = 0
+        room["choices"] = None
+        room["chosen"] = False
+        room["hint_mask"] = None
+        room["hint_used"] = False
+        await pic_broadcast(room, {"type": "info", "msg": "Yeni tur için en az 2 oyuncu gerekli."})
+        await pic_state_push(room_id)
+        return
+
+    # Tur sayacını artır
+    room["round_index"] = room.get("round_index", 0) + 1
+    room["hint_used"] = False
+    room["hint_mask"] = None
 
     drawer = pic_next_drawer(room)
-    room["current_drawer"]=drawer
+    room["current_drawer"] = drawer
     room["strokes"].clear()
-    room["started"]=True
-    room["seconds_left"]=0
-    room["chosen"]=False
-    room["word"]=None
-    room["choices"]=random.sample(PIC_WORDS, 3)
+    room["started"] = True
+    room["seconds_left"] = 0
+    room["chosen"] = False
+    room["word"] = None
+    room["choices"] = random.sample(PIC_WORDS, 3)
 
-    await pic_broadcast(room, {"type":"round_start","drawer":drawer})
+    await pic_broadcast(room, {"type": "round_start", "drawer": drawer, "round": room["round_index"]})
     await pic_state_push(room_id)
 
+    # Çizene kelime seçim penceresi
     ws = room["ws_by_pid"].get(drawer)
-    if ws: await ws_send(ws, {"type":"choose_word","choices":room["choices"],"timeout":CHOICE_SECONDS})
+    if ws:
+        await ws_send(ws, {"type": "choose_word", "choices": room["choices"], "timeout": CHOICE_SECONDS})
 
+    # Kelime seçilmesi için süre
     try:
         for _ in range(CHOICE_SECONDS):
             await asyncio.sleep(1)
-            if room["chosen"]: break
+            if room["chosen"]:
+                break
         if not room["chosen"] and room["choices"]:
             room["word"] = random.choice(room["choices"])
-            room["chosen"]=True
-            await pic_broadcast(room, {"type":"info","msg":"Kelime otomatik seçildi."})
+            room["chosen"] = True
+            room["hint_mask"] = mask_word(room["word"])
+            await pic_broadcast(room, {"type": "info", "msg": "Kelime otomatik seçildi."})
     except asyncio.CancelledError:
         return
 
-    room["seconds_left"]=ROUND_SECONDS
+    room["seconds_left"] = ROUND_SECONDS
     await pic_state_push(room_id)
 
+    # Tur süresi geri sayımı
     try:
-        while room["seconds_left"]>0:
+        while room["seconds_left"] > 0:
             await asyncio.sleep(1)
-            room["seconds_left"]-=1
-            if room["seconds_left"]%5==0 or room["seconds_left"]<=5:
+            room["seconds_left"] -= 1
+            if room["seconds_left"] % 5 == 0 or room["seconds_left"] <= 5:
                 await pic_state_push(room_id)
-        await pic_broadcast(room, {"type":"round_end","result":"timeup","word":room["word"]})
+        await pic_broadcast(room, {"type": "round_end", "result": "timeup", "word": room["word"]})
     except asyncio.CancelledError:
         return
+
     await asyncio.sleep(INTERMISSION)
     room["round_task"] = asyncio.create_task(pic_start_round(room_id))
 
 async def pic_end_round_with_winner(room_id, winner_pid):
     room = pic_rooms.get(room_id)
-    if not room: return
-    room["players"][winner_pid]["score"] += 10
+    if not room:
+        return
+
+    # Skor güncelleme
+    if winner_pid in room["players"]:
+        room["players"][winner_pid]["score"] += 10
     d = room.get("current_drawer")
-    if d and d in room["players"]: room["players"][d]["score"] += 5
-    await pic_broadcast(room, {"type":"round_end","result":"guessed","winner":winner_pid,"word":room["word"]})
+    if d and d in room["players"]:
+        room["players"][d]["score"] += 5
+
+    winner_name = room["players"].get(winner_pid, {}).get("name", winner_pid)
+
+    await pic_broadcast(room, {
+        "type": "round_end",
+        "result": "guessed",
+        "winner": winner_pid,
+        "winnerName": winner_name,
+        "word": room["word"]
+    })
+
     task = room.get("round_task")
-    if task and not task.done(): task.cancel()
+    if task and not task.done():
+        task.cancel()
+
     await asyncio.sleep(INTERMISSION)
     room["round_task"] = asyncio.create_task(pic_start_round(room_id))
 
 @app.websocket("/ws/pictionary")
 async def pictionary_ws(ws: WebSocket):
     await ws.accept()
-    room_id=None
-    pid=secrets.token_hex(3)
-    ws.state_pid=pid
+    room_id = None
+    pid = secrets.token_hex(3)
+    ws.state_pid = pid
     try:
         while True:
             data = json.loads(await ws.receive_text())
@@ -179,12 +243,14 @@ async def pictionary_ws(ws: WebSocket):
                 mode = data.get("mode", "join")   # create / join
 
                 if room_id not in pic_rooms and mode != "create":
-                    await ws_send(ws, {"type": "join_error","reason": "no_such_room"})
+                    await ws_send(ws, {"type": "join_error", "reason": "no_such_room"})
                     continue
 
                 new_room = room_id not in pic_rooms
                 room = pic_room(room_id)
 
+                # Şifre kontrolü (varsayılan logic'i istersen buraya ekleyebiliriz;
+                # şimdilik sadece odanın password alanını dolduruyoruz)
                 room["clients"].add(ws)
                 room["ws_by_pid"][pid] = ws
                 room["players"][pid] = {"name": name, "score": 0}
@@ -214,62 +280,149 @@ async def pictionary_ws(ws: WebSocket):
                 else:
                     await pic_state_push(room_id)
 
-            elif typ=="choose_word" and room_id:
-                room=pic_rooms.get(room_id)
-                if not room or room.get("current_drawer")!=pid: continue
-                choice = str(data.get("choice","")).strip()
+            elif typ == "choose_word" and room_id:
+                room = pic_rooms.get(room_id)
+                if not room or room.get("current_drawer") != pid:
+                    continue
+                choice = str(data.get("choice", "")).strip()
                 if room.get("choices") and choice in room["choices"]:
-                    room["word"]=choice; room["chosen"]=True
-                    await pic_broadcast(room, {"type":"info","msg":"Kelime seçildi!"})
+                    room["word"] = choice
+                    room["chosen"] = True
+                    room["hint_mask"] = mask_word(room["word"])
+                    await pic_broadcast(room, {"type": "info", "msg": "Kelime seçildi!"})
                     await pic_state_push(room_id)
 
-            elif typ=="leave" and room_id:
+            elif typ == "leave" and room_id:
                 break
 
-            elif typ=="stroke" and room_id:
-                room=pic_rooms.get(room_id)
-                if not room or room.get("current_drawer")!=pid or not room.get("chosen"): continue
-                s={"x0":data["x0"],"y0":data["y0"],"x1":data["x1"],"y1":data["y1"],"w":data.get("w",2),"c":data.get("c","#000")}
+            elif typ == "stroke" and room_id:
+                room = pic_rooms.get(room_id)
+                if not room or room.get("current_drawer") != pid or not room.get("chosen"):
+                    continue
+                s = {
+                    "x0": data["x0"],
+                    "y0": data["y0"],
+                    "x1": data["x1"],
+                    "y1": data["y1"],
+                    "w": data.get("w", 2),
+                    "c": data.get("c", "#000")
+                }
                 room["strokes"].append(s)
-                await pic_broadcast(room, {"type":"stroke","stroke":s})
+                await pic_broadcast(room, {"type": "stroke", "stroke": s})
 
-            elif typ=="clear" and room_id:
-                room=pic_rooms.get(room_id)
-                if not room or room.get("current_drawer")!=pid or not room.get("chosen"): continue
+            elif typ == "clear" and room_id:
+                room = pic_rooms.get(room_id)
+                if not room or room.get("current_drawer") != pid or not room.get("chosen"):
+                    continue
                 room["strokes"].clear()
-                await pic_broadcast(room, {"type":"clear"})
+                await pic_broadcast(room, {"type": "clear"})
+                await pic_state_push(room_id)
 
-            elif typ=="chat" and room_id:
-                room=pic_rooms.get(room_id);
-                if not room: continue
-                text=str(data.get("text",""))[:200]
+            elif typ == "undo" and room_id:
+                # Yeni: son çizgiyi geri al
+                room = pic_rooms.get(room_id)
+                if not room or room.get("current_drawer") != pid or not room.get("chosen"):
+                    continue
+                if room["strokes"]:
+                    room["strokes"].pop()
+                    await pic_state_push(room_id)
+
+            elif typ == "hint" and room_id:
+                # Yeni: ipucu sistemi (sadece çizen, tur başına 1 kez)
+                room = pic_rooms.get(room_id)
+                if not room or room.get("current_drawer") != pid:
+                    continue
+                if not room.get("chosen") or not room.get("word"):
+                    continue
+                if room.get("hint_used"):
+                    continue
+
+                w = room["word"]
+                if not room.get("hint_mask"):
+                    room["hint_mask"] = mask_word(w)
+
+                # Henüz açılmamış bir harf pozisyonu bul
+                candidates = [
+                    i for i, ch in enumerate(w)
+                    if ch != " " and room["hint_mask"][i] == "_"
+                ]
+                if not candidates:
+                    room["hint_used"] = True
+                    await ws_send(ws, {"type": "info", "msg": "Tüm harfler zaten açık, ipucu verilemedi."})
+                    await pic_state_push(room_id)
+                    continue
+
+                idx = random.choice(candidates)
+                hm = list(room["hint_mask"])
+                hm[idx] = w[idx]
+                room["hint_mask"] = "".join(hm)
+                room["hint_used"] = True
+
+                # Çizenden 3 puan sil
+                if pid in room["players"]:
+                    room["players"][pid]["score"] = max(0, room["players"][pid]["score"] - 3)
+
+                await pic_broadcast(room, {
+                    "type": "info",
+                    "msg": "✏️ Çizen bir ipucu verdi! (3 puan kaybetti)"
+                })
+                await pic_state_push(room_id)
+
+            elif typ == "chat" and room_id:
+                room = pic_rooms.get(room_id)
+                if not room:
+                    continue
+                text = str(data.get("text", ""))[:200]
+
                 if room.get("word") and room.get("chosen") and text.strip():
-                    norm=lambda s: re.sub(r"\s+","", s.lower())
-                    if norm(text)==norm(room["word"]):
-                        await pic_broadcast(room, {"type":"guess","pid":pid,"name":room["players"][pid]["name"],"correct":True})
-                        await pic_end_round_with_winner(room_id,pid)
+                    norm = lambda s: re.sub(r"\s+", "", s.lower())
+                    if norm(text) == norm(room["word"]):
+                        await pic_broadcast(room, {
+                            "type": "guess",
+                            "pid": pid,
+                            "name": room["players"][pid]["name"],
+                            "correct": True
+                        })
+                        await pic_end_round_with_winner(room_id, pid)
                         continue
-                await pic_broadcast(room, {"type":"chat","pid":pid,"name":room["players"][pid]["name"],"text":text})
+
+                await pic_broadcast(room, {
+                    "type": "chat",
+                    "pid": pid,
+                    "name": room["players"][pid]["name"],
+                    "text": text
+                })
+
     except WebSocketDisconnect:
         pass
     finally:
         if room_id and room_id in pic_rooms:
-            room=pic_rooms[room_id]
-            info=room["players"].pop(pid, None)
+            room = pic_rooms[room_id]
+            info = room["players"].pop(pid, None)
             room["clients"].discard(ws)
             room["ws_by_pid"].pop(pid, None)
-            if pid in room["drawer_order"]: room["drawer_order"].remove(pid)
+            if pid in room["drawer_order"]:
+                room["drawer_order"].remove(pid)
             if not room["clients"]:
-                t=room.get("round_task")
-                if t and not t.done(): t.cancel()
-                pic_rooms.pop(room_id,None)
+                t = room.get("round_task")
+                if t and not t.done():
+                    t.cancel()
+                pic_rooms.pop(room_id, None)
             else:
-                await pic_broadcast(room, {"type":"system","msg":f"{(info or {}).get('name','?')} ayrıldı","players":room["players"]})
-                if room.get("current_drawer")==pid:
-                    t=room.get("round_task")
-                    if t and not t.done(): t.cancel()
-                    await pic_broadcast(room, {"type":"info","msg":"Çizen çıktı, tur yeniden başlatılıyor."})
-                    room["round_task"]=asyncio.create_task(pic_start_round(room_id))
+                await pic_broadcast(room, {
+                    "type": "system",
+                    "msg": f"{(info or {}).get('name','?')} ayrıldı",
+                    "players": room["players"]
+                })
+                if room.get("current_drawer") == pid:
+                    t = room.get("round_task")
+                    if t and not t.done():
+                        t.cancel()
+                    await pic_broadcast(room, {
+                        "type": "info",
+                        "msg": "Çizen çıktı, tur yeniden başlatılıyor."
+                    })
+                    room["round_task"] = asyncio.create_task(pic_start_round(room_id))
 
 # ==========================
 # TicTacToe (çok odalı)
@@ -814,3 +967,7 @@ def list_rooms():
         else:
             out.append({"game":"codenames","roomId":rid,"phase":"play","turn":r["turn"]})
     return JSONResponse(out)
+# ====== Statik Dosyalar (HTML Oyunlar) ======
+BASE_DIR = os.path.dirname(__file__)
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

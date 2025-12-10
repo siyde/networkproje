@@ -1,0 +1,565 @@
+# server.py — Game Hub WS Sunucusu (Pictionary + TTT + Codenames + PixelWar)
+import asyncio, json, secrets, random, re, os
+from typing import Dict
+from datetime import datetime
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+
+app = FastAPI()
+app.add_middleware(CORSMMiddleware := CORSMiddleware,
+                   allow_origins=["*"],
+                   allow_headers=["*"],
+                   allow_methods=["*"])
+
+
+
+# ==========================
+# TicTacToe (çok odalı)
+# ==========================
+ttt_rooms = {}  # roomId -> room state dict
+
+def ttt_new_room(max_rounds: int = 1):
+    return {
+        "board": [None] * 9,
+        "players": {},              # pid -> {name, mark, ws}
+        "turn": "X",
+        "scores": {"X": 0, "O": 0},
+        "round": 1,
+        "max_rounds": max_rounds,
+        "host_pid": None
+    }
+
+def ttt_winner(b):
+    wins = [
+        (0,1,2),(3,4,5),(6,7,8),
+        (0,3,6),(1,4,7),(2,5,8),
+        (0,4,8),(2,4,6)
+    ]
+    for a,b2,c in wins:
+        if b[a] and b[a] == b[b2] == b[c]:
+            return b[a]
+    if all(b):
+        return "draw"
+    return None
+
+async def ttt_broadcast(room, payload: dict):
+    msg = json.dumps(payload)
+    dead = []
+    for pid, pl in list(room["players"].items()):
+        ws = pl["ws"]
+        try:
+            await ws.send_text(msg)
+        except Exception:
+            dead.append(pid)
+    for pid in dead:
+        room["players"].pop(pid, None)
+
+async def ttt_push_state(room):
+    host_mark = None
+    host_pid = room.get("host_pid")
+    if host_pid and host_pid in room["players"]:
+        host_mark = room["players"][host_pid]["mark"]
+
+    payload = {
+        "type": "state",
+        "board": room["board"],
+        "turn": room["turn"],
+        "round": room.get("round", 1),
+        "maxRounds": room.get("max_rounds", 1),
+        "scores": room.get("scores", {"X": 0, "O": 0}),
+        "hostMark": host_mark
+    }
+    await ttt_broadcast(room, payload)
+
+@app.websocket("/ws/ttt")
+async def ttt_ws(ws: WebSocket):
+    await ws.accept()
+    pid = secrets.token_hex(3)
+    room_id = None
+    try:
+        while True:
+            data = json.loads(await ws.receive_text())
+            typ = data.get("type")
+
+            if typ == "join":
+                room_id = data["roomId"]
+                name = data.get("name", "anon")[:24]
+                mode = data.get("mode", "join")
+
+                if room_id not in ttt_rooms and mode != "create":
+                    await ws_send(ws, {"type": "join_error","reason": "no_such_room"})
+                    continue
+
+                new_room = False
+                if room_id not in ttt_rooms and mode == "create":
+                    max_rounds = int(data.get("rounds", 1) or 1)
+                    if max_rounds not in (1, 3, 5, 10):
+                        max_rounds = 1
+                    ttt_rooms[room_id] = ttt_new_room(max_rounds)
+                    new_room = True
+
+                room = ttt_rooms[room_id]
+
+                if len(room["players"]) >= 2:
+                    await ws_send(ws, {"type": "info","msg": "Oda dolu (2/2)"})
+                    continue
+
+                used_marks = [p["mark"] for p in room["players"].values()]
+                mark = "X" if "X" not in used_marks else "O"
+
+                room["players"][pid] = {"name": name,"mark": mark,"ws": ws}
+
+                if new_room:
+                    room["host_pid"] = pid
+
+                await ws_send(ws, {"type": "joined","pid": pid,"mark": mark,"isHost": room.get("host_pid") == pid})
+                await ttt_push_state(room)
+
+            if typ == "move" and room_id:
+                room = ttt_rooms.get(room_id)
+                if not room or pid not in room["players"]:
+                    continue
+                mark = room["players"][pid]["mark"]
+                if room["turn"] != mark:
+                    continue
+                idx = int(data.get("idx", -1))
+                if idx < 0 or idx > 8 or room["board"][idx]:
+                    continue
+
+                room["board"][idx] = mark
+                room["turn"] = "O" if mark == "X" else "X"
+
+                w = ttt_winner(room["board"])
+                if w:
+                    if w != "draw":
+                        room["scores"][w] = room["scores"].get(w, 0) + 1
+
+                    current_round = room.get("round", 1)
+                    max_rounds = room.get("max_rounds", 1)
+                    msg = "Berabere!" if w == "draw" else f"Kazanan: {w}"
+                    match_over = current_round >= max_rounds
+
+                    result_payload = {
+                        "type": "result",
+                        "msg": msg,
+                        "round": current_round,
+                        "maxRounds": max_rounds,
+                        "scores": room["scores"],
+                        "matchOver": match_over
+                    }
+                    await ttt_broadcast(room, result_payload)
+
+                    room["board"] = [None] * 9
+                    room["turn"] = "X"
+
+                    if match_over:
+                        room["round"] = 1
+                        room["scores"] = {"X": 0, "O": 0}
+                    else:
+                        room["round"] = current_round + 1
+
+                    await ttt_push_state(room)
+                else:
+                    await ttt_push_state(room)
+
+            if typ == "rematch" and room_id:
+                room = ttt_rooms.get(room_id)
+                if not room:
+                    continue
+                if room.get("host_pid") != pid:
+                    await ws_send(ws, {"type": "info","msg": "Yeni seri başlatma yetkisi sadece oda sahibinde."})
+                    continue
+
+                room["board"] = [None] * 9
+                room["turn"] = "X"
+                room["scores"] = {"X": 0, "O": 0}
+                room["round"] = 1
+
+                await ttt_broadcast(room, {"type": "info","msg": "Oda sahibi yeni bir seri başlattı."})
+                await ttt_push_state(room)
+
+            if typ == "host_exit" and room_id:
+                room = ttt_rooms.get(room_id)
+                if not room:
+                    continue
+
+                if room.get("host_pid") != pid:
+                    await ws_send(ws, {"type": "info","msg": "Odayı kapatma yetkisi sadece oda sahibinde."})
+                    continue
+
+                await ttt_broadcast(room, {"type": "host_left","msg": "Oda sahibi oyunu terk etti. Oda kapatılıyor."})
+
+                for other_pid, pl in list(room["players"].items()):
+                    if other_pid == pid:
+                        continue
+                    try:
+                        await pl["ws"].close()
+                    except:
+                        pass
+
+                ttt_rooms.pop(room_id, None)
+                break
+
+    except WebSocketDisconnect:
+        pass
+    finally:
+        if room_id and room_id in ttt_rooms:
+            room = ttt_rooms[room_id]
+            if pid in room["players"]:
+                room["players"].pop(pid, None)
+            if not room["players"]:
+                ttt_rooms.pop(room_id, None)
+            else:
+                if room.get("host_pid") == pid:
+                    new_host = next(iter(room["players"].keys()), None)
+                    room["host_pid"] = new_host
+
+# ==========================
+# Codenames
+# ==========================
+CN_WORDS = [
+    "ELMA","ARABA","KÖPRÜ","AY","GÜNEŞ","BULUT","ROBOT","PENCERE","KALEM","ÇANTA",
+    "KAMERA","DAĞ","DENİZ","BALIK","KEDİ","KÖPEK","UÇAK","TREN","MASA","SANDALYE",
+    "ORMAN","HARİTA","PİZZA","LİMON","KALP","YILDIZ","OKUL","OYUN","DÜĞME","BİLGİSAYAR",
+    "RADYO","TELEFON","BAHÇE","MÜZİK","SPOR","FUTBOL","ZİL","KAPI","ELDİVEN","KULAK",
+    "BURUN","GÖZLÜK","İSKELE","TİLKİ","ASLAN","TAVŞAN","KAZAK","ELBİSE","KUPA","FİLM"
+]
+
+def cn_new_state_lobby():
+    return {
+        "phase":"lobby",
+        "players":{},
+        "spymaster": {"red":None,"blue":None}
+    }
+
+def cn_new_board():
+    words = random.sample(CN_WORDS, 25)
+    colors = ['red']*9 + ['blue']*8 + ['neut']*7 + ['ass']*1
+    random.shuffle(colors)
+    return {
+        "phase":"play",
+        "words": words,
+        "colors": colors,
+        "revealed": [],
+        "turn": "red",
+        "clue": {"word": None, "count": 0},
+        "guessesLeft": 0,
+        "players":{},
+        "spymaster":{"red":None,"blue":None}
+    }
+
+cn_rooms = {}  # roomId -> state
+
+async def cn_broadcast(room, payload):
+    dead=[]
+    for pid, pl in list(room["players"].items()):
+        ws = pl["ws"]
+        try: await ws.send_text(json.dumps(payload))
+        except: dead.append(pid)
+    for pid in dead: room["players"].pop(pid, None)
+
+async def cn_push_lobby(room):
+    lobby = {
+        "phase":"lobby",
+        "players": {pid: {"name":pl["name"],"team":pl.get("team"),"role":pl.get("role")} for pid,pl in room["players"].items()},
+        "spymaster": room["spymaster"]
+    }
+    await cn_broadcast(room, {"type":"lobby_state","state":lobby})
+
+async def cn_push_play(room):
+    for pid, pl in list(room["players"].items()):
+        ws=pl["ws"]
+        try:
+            if pl.get("role")=="spymaster":
+                state = {
+                    "words": room["words"], "colors": room["colors"],
+                    "revealed": room["revealed"], "turn": room["turn"],
+                    "clue": room["clue"], "guessesLeft": room["guessesLeft"]
+                }
+            else:
+                colors_view=['neut']*25
+                for i in room["revealed"]: colors_view[i]=room["colors"][i]
+                state = {
+                    "words": room["words"], "colors": colors_view,
+                    "revealed": room["revealed"], "turn": room["turn"],
+                    "clue": room["clue"], "guessesLeft": room["guessesLeft"]
+                }
+            payload = {"type":"state","state":state,"you":{"team":pl.get("team"),"role":pl.get("role")}}
+            await ws.send_text(json.dumps(payload))
+        except: pass
+
+def cn_check_win(room):
+    red_left = sum(1 for i,c in enumerate(room["colors"]) if c=='red' and i not in room["revealed"])
+    blue_left = sum(1 for i,c in enumerate(room["colors"]) if c=='blue' and i not in room["revealed"])
+    if red_left==0: return "red"
+    if blue_left==0: return "blue"
+    return None
+
+def cn_requirements_ok(room):
+    reds = [pl for pl in room["players"].values() if pl.get("team")=="red"]
+    blues = [pl for pl in room["players"].values() if pl.get("team")=="blue"]
+    red_spy = room["spymaster"]["red"] is not None
+    blue_spy = room["spymaster"]["blue"] is not None
+    red_ops = any(pl.get("role")=="operative" for pl in reds)
+    blue_ops = any(pl.get("role")=="operative" for pl in blues)
+    return red_spy and blue_spy and (red_ops or blue_ops) and len(room["players"])>=2
+
+@app.websocket("/ws/codenames")
+async def cn_ws(ws: WebSocket):
+    await ws.accept()
+    pid = secrets.token_hex(3)
+    room_id = None
+    try:
+        while True:
+            data = json.loads(await ws.receive_text())
+            typ = data.get("type")
+
+            if typ == "join":
+                room_id = data["roomId"]
+                name = data.get("name", "anon")[:24]
+                mode = data.get("mode", "join")
+
+                if room_id not in cn_rooms and mode != "create":
+                    await ws_send(ws, {"type": "join_error","reason": "no_such_room"})
+                    continue
+
+                if room_id not in cn_rooms and mode == "create":
+                    cn_rooms[room_id] = cn_new_state_lobby()
+
+                room = cn_rooms[room_id]
+                room["players"][pid] = {"name": name,"team": None,"role": None,"ws": ws}
+
+                await ws_send(ws, {"type": "joined", "pid": pid})
+                await cn_push_lobby(room)
+
+            if typ=="set_team_role" and room_id:
+                room = cn_rooms.get(room_id);
+                if not room or room.get("phase")=="play": continue
+                team = data.get("team")
+                role = data.get("role")
+                if team not in ("red","blue") or role not in ("spymaster","operative"):
+                    continue
+                if role=="spymaster":
+                    if room["spymaster"][team] is not None and room["spymaster"][team]!=pid:
+                        await ws_send(ws, {"type":"info","msg":"Bu takımın spymaster'ı dolu."})
+                        continue
+                    for t in ("red","blue"):
+                        if room["spymaster"][t]==pid: room["spymaster"][t]=None
+                    room["spymaster"][team]=pid
+                else:
+                    for t in ("red","blue"):
+                        if room["spymaster"][t]==pid: room["spymaster"][t]=None
+
+                room["players"][pid]["team"]=team
+                room["players"][pid]["role"]=role
+                await ws_send(ws, {"type":"you","team":team,"role":role})
+                await cn_push_lobby(room)
+
+            if typ=="start_game" and room_id:
+                room = cn_rooms.get(room_id);
+                if not room or room.get("phase")=="play": continue
+                if not cn_requirements_ok(room):
+                    await ws_send(ws, {"type":"info","msg":"Başlatmak için iki takımda da 1 spymaster ve oyuncular olmalı."})
+                    continue
+                play = cn_new_board()
+                play["players"] = room["players"]
+                play["spymaster"] = room["spymaster"]
+                cn_rooms[room_id] = play
+                await cn_push_play(play)
+
+            if typ=="clue" and room_id:
+                room = cn_rooms.get(room_id)
+                if not room or room.get("phase")!="play": continue
+                if room["spymaster"][room["turn"]] != pid:
+                    await ws_send(ws, {"type":"info","msg":"İpucu verme yetkin yok"})
+                    continue
+                word = str(data.get("word","")).strip().upper()[:20]
+                count = int(data.get("count",0))
+                room["clue"] = {"word":word, "count":count}
+                room["guessesLeft"] = max(0,count) + 1
+                await cn_broadcast(room, {"type":"info","msg":f"İpucu: {word} ({count})"})
+                await cn_push_play(room)
+
+            if typ=="guess" and room_id:
+                room = cn_rooms.get(room_id)
+                if not room or room.get("phase")!="play": continue
+                pl = room["players"].get(pid);
+                if not pl or pl.get("role")!="operative" or pl.get("team")!=room["turn"]:
+                    continue
+                idx = int(data.get("idx",-1))
+                if idx<0 or idx>=25 or idx in room["revealed"]: continue
+
+                room["revealed"].append(idx)
+                color = room["colors"][idx]
+
+                if color=='ass':
+                    winner = 'blue' if room["turn"]=='red' else 'red'
+                    await cn_broadcast(room, {"type":"result","msg":f"SUİKAST! {winner.upper()} kazandı!"})
+                    cn_rooms.pop(room_id, None); continue
+
+                if color!=room["turn"]:
+                    room["guessesLeft"]=0
+                else:
+                    if room["guessesLeft"]>0: room["guessesLeft"]-=1
+
+                win = cn_check_win(room)
+                if win:
+                    await cn_broadcast(room, {"type":"result","msg":f"{win.upper()} kazandı!"})
+                    cn_rooms.pop(room_id, None); continue
+
+                if room["guessesLeft"]<=0:
+                    room["turn"] = 'blue' if room["turn"]=='red' else 'red'
+                    room["clue"] = {"word":None,"count":0}
+
+                await cn_push_play(room)
+
+            if typ=="end_turn" and room_id:
+                room = cn_rooms.get(room_id)
+                if not room or room.get("phase")!="play": continue
+                pl = room["players"].get(pid)
+                if not pl or pl.get("team") != room["turn"]:
+                    continue
+                room["turn"] = 'blue' if room["turn"]=='red' else 'red'
+                room["clue"] = {"word":None,"count":0}
+                room["guessesLeft"] = 0
+                await cn_push_play(room)
+
+    except WebSocketDisconnect:
+        pass
+    finally:
+        if room_id and room_id in cn_rooms:
+            room = cn_rooms[room_id]
+            for t in ("red","blue"):
+                if room.get("spymaster",{}).get(t)==pid:
+                    room["spymaster"][t]=None
+            if "players" in room and pid in room["players"]:
+                room["players"].pop(pid, None)
+            if not room.get("players"): cn_rooms.pop(room_id, None)
+
+# ==========================
+# Pixel War (Kare Kapmaca)
+# ==========================
+pixel_rooms = {}
+GRID_SIZE = 36
+COLORS = ["#e74c3c", "#3498db", "#f1c40f", "#9b59b6", "#2ecc71", "#e67e22"]
+
+async def pixel_timer(room_id):
+    for i in range(30, -1, -1):
+        if room_id not in pixel_rooms: return
+        room = pixel_rooms[room_id]
+        for p in room["players"]:
+            try: await p["ws"].send_text(json.dumps({"type": "tick", "seconds": i}))
+            except: pass
+        await asyncio.sleep(1)
+
+    if room_id in pixel_rooms:
+        room = pixel_rooms[room_id]
+        room["active"] = False
+        counts = {}
+        for c in room["board"]:
+            if c: counts[c] = counts.get(c, 0) + 1
+
+        winner_name = "Kimse"
+        max_score = -1
+        for p in room["players"]:
+            score = counts.get(p["color"], 0)
+            if score > max_score:
+                max_score = score
+                winner_name = p["name"]
+
+        msg = {"type": "game_over", "winner": winner_name}
+        for p in room["players"]:
+            try: await p["ws"].send_text(json.dumps(msg))
+            except: pass
+
+def calculate_scores(room):
+    counts = {}
+    for c in room["board"]:
+        if c: counts[c] = counts.get(c, 0) + 1
+    scores = {}
+    for p in room["players"]:
+        scores[p["name"]] = counts.get(p["color"], 0)
+    return scores
+
+@app.websocket("/ws/pixelwar")
+async def pixel_ws(ws: WebSocket):
+    await ws.accept()
+    room_id = None
+    pid = secrets.token_hex(3)
+    try:
+        while True:
+            data = json.loads(await ws.receive_text())
+            typ = data.get("type")
+
+            if typ == "join":
+                room_id = data["roomId"]
+                name = data.get("name", "Anonim")
+                if room_id not in pixel_rooms:
+                    pixel_rooms[room_id] = {"players": [], "board": [None]*GRID_SIZE, "active": False}
+
+                room = pixel_rooms[room_id]
+                color_idx = len(room["players"]) % len(COLORS)
+                my_color = COLORS[color_idx]
+
+                room["players"].append({"pid": pid, "name": name, "color": my_color, "ws": ws})
+                await ws.send_text(json.dumps({"type": "welcome", "color": my_color}))
+
+                scores = calculate_scores(room)
+                await ws.send_text(json.dumps({"type": "state", "board": room["board"], "scores": scores}))
+
+            elif typ == "start" and room_id:
+                room = pixel_rooms[room_id]
+                if not room["active"]:
+                    room["active"] = True
+                    room["board"] = [None] * GRID_SIZE
+                    asyncio.create_task(pixel_timer(room_id))
+                    scores = calculate_scores(room)
+                    broadcast = json.dumps({"type": "state", "board": room["board"], "scores": scores})
+                    for p in room["players"]: await p["ws"].send_text(broadcast)
+
+            elif typ == "click" and room_id:
+                room = pixel_rooms[room_id]
+                if not room["active"]: continue
+                player = next((p for p in room["players"] if p["pid"] == pid), None)
+                if player:
+                    idx = int(data.get("idx", 0))
+                    if 0 <= idx < GRID_SIZE:
+                        room["board"][idx] = player["color"]
+                        scores = calculate_scores(room)
+                        broadcast = json.dumps({"type": "state", "board": room["board"], "scores": scores})
+                        for p in room["players"]: await p["ws"].send_text(broadcast)
+
+    except WebSocketDisconnect:
+        if room_id and room_id in pixel_rooms:
+            room = pixel_rooms[room_id]
+            room["players"] = [p for p in room["players"] if p["pid"] != pid]
+            if not room["players"]: del pixel_rooms[room_id]
+
+# ==========================
+# Health / Rooms
+# ==========================
+@app.get("/health")
+def health():
+    return {"status":"ok", "time": datetime.utcnow().isoformat()+"Z"}
+
+@app.get("/rooms")
+def list_rooms():
+    out=[]
+    for rid, r in pic_rooms.items():
+        out.append({"game":"pictionary","roomId":rid,"players":len(r["players"]),"started":r.get("started",False),"secondsLeft":r.get("seconds_left",0)})
+    for rid, r in ttt_rooms.items():
+        out.append({"game":"ttt","roomId":rid,"players":len(r["players"])})
+
+    for rid, r in cn_rooms.items():
+        if r.get("phase")=="lobby":
+            out.append({"game":"codenames","roomId":rid,"phase":"lobby","players":len(r["players"]),"spies":r.get("spymaster",{})})
+        else:
+            out.append({"game":"codenames","roomId":rid,"phase":"play","turn":r["turn"]})
+    return JSONResponse(out)
+# ====== Statik Dosyalar (HTML Oyunlar) ======
+BASE_DIR = os.path.dirname(__file__)
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
