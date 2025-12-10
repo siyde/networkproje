@@ -1,65 +1,64 @@
 <!doctype html>
 <html lang="tr">
 <head>
-  <meta charset="utf-8"/>
-  <title>Game Hub</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="utf-8" />
+  <title>Gameverse Arcade</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     :root{
-      --accent:#6366f1;
-      --accent-soft:rgba(99,102,241,0.18);
-      --border-soft:rgba(148,163,184,0.45);
+      --bg:#050816;
+      --bg-soft:#0b1020;
+      --accent-pink:#ff5c8a;
+      --accent-yellow:#ffdd57;
+      --accent-cyan:#4fd1ff;
+      --card-bg:#0f172a;
+      --card-border:#1f2937;
       --text:#f9fafb;
       --muted:#9ca3af;
     }
+
     *{
       box-sizing:border-box;
       margin:0;
       padding:0;
       font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
     }
+
     body{
       min-height:100vh;
       background:
-        radial-gradient(circle at 0 0,#1f2937,#020617),
-        radial-gradient(circle at 100% 100%,#4f46e5,#020617);
+        radial-gradient(circle at 0 0,#1d1135,#050816),
+        radial-gradient(circle at 100% 100%,#ff5c8a22,#050816);
+      color:var(--text);
       display:flex;
       align-items:center;
       justify-content:center;
-      padding:20px;
-      color:var(--text);
+      padding:24px 16px;
     }
+
     .shell{
       width:100%;
-      max-width:960px;
+      max-width:1040px;
+      background:var(--bg-soft);
       border-radius:28px;
-      padding:22px 22px 18px;
-      background:linear-gradient(135deg,rgba(15,23,42,0.96),rgba(15,23,42,0.98));
+      border:2px solid #111827;
       box-shadow:
-        0 24px 80px rgba(15,23,42,0.9),
-        0 0 0 1px rgba(15,23,42,1);
+        0 24px 80px rgba(0,0,0,.8),
+        0 0 0 1px rgba(15,23,42,.9);
+      padding:20px 20px 16px;
       position:relative;
       overflow:hidden;
     }
-    .shell::before,
-    .shell::after{
+
+    .shell::before{
       content:"";
       position:absolute;
-      border-radius:999px;
-      filter:blur(28px);
-      opacity:.7;
+      inset:-80px;
+      background:
+        radial-gradient(circle at 0 0,rgba(79,209,255,.15),transparent 60%),
+        radial-gradient(circle at 100% 100%,rgba(255,221,87,.15),transparent 55%);
+      opacity:1;
       pointer-events:none;
-      mix-blend-mode:screen;
-    }
-    .shell::before{
-      width:260px;height:260px;
-      background:radial-gradient(circle,rgba(59,130,246,.9),transparent);
-      top:-90px;right:-70px;
-    }
-    .shell::after{
-      width:220px;height:220px;
-      background:radial-gradient(circle,rgba(251,146,60,.9),transparent);
-      bottom:-70px;left:-50px;
     }
 
     .inner{
@@ -67,68 +66,76 @@
       z-index:1;
       display:flex;
       flex-direction:column;
-      gap:20px;
+      gap:18px;
     }
 
-    /* HERO */
-    .hero{
+    /* HEADER / BRAND */
+    header{
       display:flex;
       justify-content:space-between;
       align-items:flex-start;
-      gap:16px;
+      gap:14px;
       flex-wrap:wrap;
     }
-    .hero-main{
-      max-width: 70%;
-    }
-    @media (max-width:720px){
-      .hero-main{max-width:100%;}
-      .hero{flex-direction:column;align-items:flex-start;}
+
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:12px;
     }
 
-    .badge{
-      display:inline-flex;
+    .brand-logo{
+      width:40px;
+      height:40px;
+      border-radius:12px;
+      background:
+        linear-gradient(135deg,var(--accent-yellow),var(--accent-pink));
+      display:flex;
       align-items:center;
-      gap:6px;
-      padding:4px 10px;
-      border-radius:999px;
-      border:1px solid rgba(148,163,184,.65);
-      background:rgba(15,23,42,.95);
-      font-size:11px;
-      text-transform:uppercase;
-      letter-spacing:.13em;
-      color:var(--muted);
+      justify-content:center;
+      box-shadow:0 0 22px rgba(255,92,138,.8);
+      position:relative;
+      overflow:hidden;
     }
-    .badge-dot{
-      width:6px;height:6px;
+
+    .brand-logo::after{
+      content:"";
+      position:absolute;
+      width:60%;
+      height:4px;
       border-radius:999px;
-      background:#22c55e;
-      box-shadow:0 0 0 4px rgba(34,197,94,.4);
+      background:rgba(0,0,0,.4);
+      bottom:6px;
+      left:50%;
+      transform:translateX(-50%);
     }
-    h1{
-      margin:10px 0 4px;
-      font-size:26px;
+
+    .brand-logo span{
+      font-size:22px;
+      font-weight:700;
+      color:#111827;
+      text-shadow:0 0 8px rgba(255,255,255,.7);
+    }
+
+    .brand-text h1{
+      font-size:22px;
       letter-spacing:.18em;
+      text-transform:uppercase;
     }
-    .subtitle{
+
+    .brand-text h1 span.arcade{
+      background:linear-gradient(90deg,#ffdd57,#ff5c8a,#4fd1ff);
+      -webkit-background-clip:text;
+      color:transparent;
+    }
+
+    .brand-text p{
+      margin-top:4px;
       font-size:13px;
       color:var(--muted);
     }
-    .host-line{
-      margin-top:8px;
-      font-size:12px;
-      color:var(--muted);
-    }
-    .host-line code{
-      background:#020617;
-      padding:3px 7px;
-      border-radius:999px;
-      border:1px solid rgba(55,65,81,.9);
-      font-size:11px;
-      color:#e5e7eb;
-    }
 
-    .status-wrap{
+    .status-box{
       display:flex;
       flex-direction:column;
       align-items:flex-end;
@@ -136,159 +143,270 @@
       font-size:11px;
       color:var(--muted);
     }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:4px 10px;
+      border-radius:999px;
+      border:1px solid rgba(148,163,184,.5);
+      background:rgba(15,23,42,.95);
+      font-size:11px;
+      text-transform:uppercase;
+      letter-spacing:.12em;
+    }
+
+    .host-pill code{
+      background:#020617;
+      border-radius:999px;
+      padding:2px 6px;
+      border:1px solid #111827;
+      font-size:10px;
+    }
+
     .status-pill{
       padding:3px 9px;
       border-radius:999px;
-      border:1px solid transparent;
       font-size:11px;
-    }
-    .status-online{
-      background:#022c22;
-      border-color:#16a34a;
-      color:#bbf7d0;
-    }
-    .status-offline{
-      background:#3f1c1c;
-      border-color:#ef4444;
-      color:#fecaca;
+      min-width:96px;
+      text-align:center;
     }
 
-    /* GAMES */
-    .games-title{
-      margin-top:6px;
-      margin-bottom:8px;
+    .status-online{
+      background:#022c22;
+      border:1px solid #16a34a;
+      color:#bbf7d0;
+      box-shadow:0 0 12px rgba(34,197,94,.6);
+    }
+
+    .status-offline{
+      background:#3f1c1c;
+      border:1px solid #ef4444;
+      color:#fecaca;
+      box-shadow:0 0 10px rgba(248,113,113,.5);
+    }
+
+    /* SECTION TITLE */
+    .section-title{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:8px;
+      margin-top:4px;
+    }
+
+    .section-title h2{
       font-size:12px;
       text-transform:uppercase;
-      letter-spacing:.18em;
+      letter-spacing:.22em;
       color:var(--muted);
     }
-    .games-grid{
+
+    .chip-row{
+      display:flex;
+      gap:6px;
+      flex-wrap:wrap;
+    }
+
+    .chip{
+      font-size:11px;
+      padding:4px 8px;
+      border-radius:999px;
+      border:1px dashed rgba(148,163,184,.6);
+      color:var(--muted);
+      background:rgba(15,23,42,.7);
+    }
+
+    /* GAMES GRID */
+    .grid{
       display:grid;
       grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
       gap:12px;
+      margin-top:4px;
     }
+
     .card{
-      background:radial-gradient(circle at 0 0,var(--accent-soft),rgba(15,23,42,.98));
-      border-radius:18px;
-      padding:12px 12px 11px;
-      border:1px solid var(--border-soft);
-      box-shadow:
-        0 14px 38px rgba(15,23,42,.85),
-        0 0 0 1px rgba(15,23,42,1);
       position:relative;
+      background:var(--card-bg);
+      border-radius:18px;
+      border:1px solid var(--card-border);
+      padding:11px 11px 10px;
+      box-shadow:
+        0 12px 30px rgba(0,0,0,.7),
+        0 0 0 1px rgba(15,23,42,.9);
       overflow:hidden;
       display:flex;
       flex-direction:column;
       gap:6px;
     }
-    .card::after{
+
+    .card::before{
       content:"";
       position:absolute;
-      inset:0;
-      background:radial-gradient(circle at 100% 0,rgba(251,146,60,.35),transparent 55%);
+      inset:-40%;
       opacity:0;
-      transition:opacity .2s ease;
+      mix-blend-mode:screen;
       pointer-events:none;
+      transition:opacity .18s ease-out;
     }
-    .card:hover::after{opacity:1;}
+    .card.card-pictionary::before{
+      background:radial-gradient(circle at 0 0,rgba(79,209,255,.35),transparent 55%);
+    }
+    .card.card-codenames::before{
+      background:radial-gradient(circle at 100% 0,rgba(255,92,138,.4),transparent 55%);
+    }
+    .card.card-ttt::before{
+      background:radial-gradient(circle at 0 100%,rgba(255,221,87,.45),transparent 60%);
+    }
+    .card.card-pixelwar::before{
+      background:radial-gradient(circle at 100% 100%,rgba(94,234,212,.45),transparent 60%);
+    }
 
-    .card-header{
+    .card:hover::before{
+      opacity:.9;
+    }
+
+    .card-top{
       display:flex;
       justify-content:space-between;
       align-items:center;
-      gap:6px;
+      gap:8px;
     }
+
     .card-title{
       display:flex;
       align-items:center;
-      gap:6px;
-      font-size:16px;
-      font-weight:600;
+      gap:8px;
     }
-    .icon-pill{
-      width:24px;height:24px;
-      border-radius:999px;
+
+    .icon-chip{
+      width:28px;
+      height:28px;
+      border-radius:10px;
       display:flex;
       align-items:center;
       justify-content:center;
-      font-size:14px;
+      font-size:16px;
       background:#020617;
-      border:1px solid rgba(148,163,184,.7);
+      border:1px solid rgba(148,163,184,.8);
     }
-    .pill-sm{
+
+    .card-title-text{
+      display:flex;
+      flex-direction:column;
+    }
+
+    .card-title-text strong{
+      font-size:15px;
+    }
+
+    .card-title-text span{
       font-size:11px;
+      color:var(--muted);
+    }
+
+    .tag{
+      font-size:10px;
       padding:3px 7px;
       border-radius:999px;
       border:1px solid rgba(148,163,184,.6);
       color:var(--muted);
+      text-transform:uppercase;
+      letter-spacing:.12em;
     }
-    .card-desc{
+
+    .card-body{
       font-size:12px;
       color:var(--muted);
-      min-height:30px;
+      min-height:32px;
     }
+
     .card-hint{
       font-size:11px;
-      color:#cbd5f5;
-      opacity:.9;
+      color:#e5e7eb;
+      opacity:.85;
     }
+
     .meta{
-      font-size:11px;
-      color:var(--muted);
       display:flex;
       justify-content:space-between;
-      gap:8px;
+      align-items:center;
       margin-top:2px;
+      font-size:11px;
+      color:var(--muted);
+      gap:6px;
     }
+
     .meta code{
       font-size:10px;
       background:#020617;
       padding:2px 5px;
-      border-radius:8px;
-      border:1px solid rgba(55,65,81,.9);
+      border-radius:7px;
+      border:1px solid #111827;
     }
+
     .actions{
       margin-top:6px;
       display:flex;
-      gap:8px;
       flex-wrap:wrap;
+      gap:7px;
     }
+
     .btn{
-      cursor:pointer;
       border-radius:999px;
       border:1px solid rgba(148,163,184,.7);
+      background:#020617;
+      color:#e5e7eb;
       font-size:12px;
       padding:7px 11px;
       display:inline-flex;
       align-items:center;
       gap:6px;
-      background:rgba(15,23,42,.9);
-      color:#e5e7eb;
+      cursor:pointer;
       text-decoration:none;
-      transition:background .15s ease,transform .08s ease,box-shadow .12s ease;
+      transition:
+        transform .08s ease-out,
+        box-shadow .12s ease-out,
+        background .12s ease-out,
+        border-color .12s ease-out;
     }
-    .btn span.icon{font-size:13px;}
-    .btn.primary{
-      border-color:rgba(129,140,248,.95);
-      background:linear-gradient(135deg,#6366f1,#f97316);
+
+    .btn span.icon{
+      font-size:13px;
+    }
+
+    .btn.play{
+      border-color:var(--accent-yellow);
+      background:linear-gradient(135deg,#ffdd57,#ff5c8a);
+      color:#111827;
       box-shadow:
-        0 10px 26px rgba(79,70,229,.8),
-        0 0 0 1px rgba(15,23,42,1);
+        0 12px 30px rgba(255,221,87,.6),
+        0 0 0 1px rgba(15,23,42,.9);
+      font-weight:600;
     }
-    .btn.primary:hover{
+
+    .btn.play:hover{
       transform:translateY(-1px);
       box-shadow:
-        0 14px 36px rgba(79,70,229,.95),
-        0 0 0 1px rgba(15,23,42,1);
+        0 16px 36px rgba(255,221,87,.85),
+        0 0 0 1px rgba(15,23,42,.9);
     }
-    .btn.primary:active{
+
+    .btn.play:active{
       transform:translateY(1px);
       box-shadow:
-        0 8px 22px rgba(79,70,229,.85),
-        0 0 0 1px rgba(15,23,42,1);
+        0 8px 22px rgba(255,221,87,.7),
+        0 0 0 1px rgba(15,23,42,.9);
     }
+
+    .btn.ghost{
+      background:rgba(15,23,42,.9);
+    }
+
     .btn.ghost:hover{
       background:#111827;
+      transform:translateY(-1px);
     }
 
     footer{
@@ -297,139 +415,216 @@
       color:var(--muted);
       display:flex;
       justify-content:space-between;
-      gap:10px;
+      gap:8px;
+      flex-wrap:wrap;
     }
+
+    footer strong{
+      color:#e5e7eb;
+    }
+
     @media (max-width:640px){
-      footer{flex-direction:column;align-items:flex-start;}
+      header{
+        flex-direction:column;
+        align-items:flex-start;
+      }
+      .status-box{
+        align-items:flex-start;
+      }
+      footer{
+        flex-direction:column;
+        align-items:flex-start;
+      }
     }
   </style>
 </head>
 <body>
   <div class="shell">
     <div class="inner">
-      <!-- HERO -->
-      <section class="hero">
-        <div class="hero-main">
-          <div class="badge">
-            <span class="badge-dot"></span>
-            GAME HUB
+      <!-- HEADER / BRAND -->
+      <header>
+        <div class="brand">
+          <div class="brand-logo">
+            <span>GV</span>
           </div>
-          <h1>CLASSROOM GAMES</h1>
-          <p class="subtitle">
-            Arkadaşlarınla aynı sunucuda oynayabileceğin basit ve hızlı mini oyunlar:
-            <strong>Pictionary</strong>, <strong>Codenames</strong> ve <strong>Tic-Tac-Toe</strong>.
-          </p>
-          <p class="host-line">
-            Sunucu: <code id="hostText"></code>
-          </p>
+          <div class="brand-text">
+            <h1><span class="arcade">GAMEVERSE</span> ARCADE</h1>
+            <p>Arkadaşlarınla aynı odada buluş, gerçek zamanlı mini oyunlar oyna.</p>
+          </div>
         </div>
-        <div class="status-wrap">
-          <span>Sunucu durumu</span>
-          <span id="statusPill" class="status-pill status-offline">Kontrol ediliyor…</span>
+        <div class="status-box">
+          <div class="pill host-pill">
+            SUNUCU
+            <code id="hostText"></code>
+          </div>
+          <div id="statusPill" class="status-pill status-offline">
+            Kontrol ediliyor…
+          </div>
         </div>
-      </section>
+      </header>
 
-      <!-- GAMES -->
-      <section>
-        <div class="games-title">Oyunlar</div>
-        <div class="games-grid">
-          <!-- Pictionary -->
-          <article class="card">
-            <div class="card-header">
-              <div class="card-title">
-                <div class="icon-pill">🎨</div>
-                <span>Pictionary Lite</span>
-              </div>
-              <span class="pill-sm">Çizim · Tahmin</span>
-            </div>
-            <p class="card-desc">Sırayla kelime çiz, diğerleri tahmin etsin; skorlar anlık güncellensin.</p>
-            <p class="card-hint">
-              Oda ID oluşturup arkadaşlarınla paylaş. Herkes aynı oda ID ile bağlandığında çizimler
-              gerçek zamanlı olarak iletilir.
-            </p>
-            <div class="meta">
-              <span>Oda tabanlı · <strong>2+ oyuncu</strong></span>
-              <span>URL: <code>/pictionary/</code></span>
-            </div>
-            <div class="actions">
-              <a class="btn primary" href="/pictionary/">
-                <span class="icon">▶</span>Oyna
-              </a>
-              <button class="btn ghost" type="button" onclick="copyHint('pictionary')">
-                <span class="icon">ℹ️</span>Nasıl oynanır?
-              </button>
-            </div>
-          </article>
-
-          <!-- Codenames -->
-          <article class="card">
-            <div class="card-header">
-              <div class="card-title">
-                <div class="icon-pill">🧠</div>
-                <span>Codenames (Lite)</span>
-              </div>
-              <span class="pill-sm">Takım · İpucu</span>
-            </div>
-            <p class="card-desc">Kırmızı ve Mavi takım, spymaster ipuçlarına göre kelimeleri bulmaya çalışır.</p>
-            <p class="card-hint">
-              Lobiye gir, takımını (kırmızı/mavi) ve rolünü (spymaster/operative) seç.
-              Her takımda bir spymaster ve en az bir oyuncu olduğunda oyun başlar.
-            </p>
-            <div class="meta">
-              <span>Takım tabanlı · <strong>4+ oyuncu</strong></span>
-              <span>URL: <code>/codenames/</code></span>
-            </div>
-            <div class="actions">
-              <a class="btn primary" href="/codenames/">
-                <span class="icon">▶</span>Oyna
-              </a>
-              <button class="btn ghost" type="button" onclick="copyHint('codenames')">
-                <span class="icon">📋</span>Kurallar
-              </button>
-            </div>
-          </article>
-
-          <!-- Tic Tac Toe -->
-          <article class="card">
-            <div class="card-header">
-              <div class="card-title">
-                <div class="icon-pill">❌</div>
-                <span>Tic-Tac-Toe</span>
-              </div>
-              <span class="pill-sm">2 Oyuncu · Sıra</span>
-            </div>
-            <p class="card-desc">Klasik X/O oyunu. Aynı oda koduyla bağlanan iki oyuncu karşılıklı oynar.</p>
-            <p class="card-hint">
-              Aynı oda kodunu giren iki oyuncu X ve O olarak eşleşir. Hamleler anında karşı tarafa yansır.
-            </p>
-            <div class="meta">
-              <span>1v1 · <strong>2 oyuncu</strong></span>
-              <span>URL: <code>/ttt/</code></span>
-            </div>
-            <div class="actions">
-              <a class="btn primary" href="/ttt/">
-                <span class="icon">▶</span>Oyna
-              </a>
-              <button class="btn ghost" type="button" onclick="copyHint('ttt')">
-                <span class="icon">ℹ️</span>Bilgi
-              </button>
-            </div>
-          </article>
+      <!-- SECTION TITLE -->
+      <section class="section-title">
+        <h2>Oyun Seç</h2>
+        <div class="chip-row">
+          <div class="chip">Oda kodu ile giriş</div>
+          <div class="chip">Gerçek zamanlı WebSocket</div>
+          <div class="chip">Tarayıcı üzerinden, kurulum yok</div>
         </div>
       </section>
 
+      <!-- GAMES GRID -->
+      <section class="grid">
+        <!-- Pictionary -->
+        <article class="card card-pictionary">
+          <div class="card-top">
+            <div class="card-title">
+              <div class="icon-chip">🎨</div>
+              <div class="card-title-text">
+                <strong>Pictionary</strong>
+                <span>Çiz & tahmin et</span>
+              </div>
+            </div>
+            <span class="tag">2+ oyuncu</span>
+          </div>
+          <p class="card-body">
+            Bir oyuncu gizli kelimeyi çizer, diğerleri tahmin eder. Skorlar anlık güncellenir.
+          </p>
+          <p class="card-hint">
+            Oda ID oluştur, arkadaşlarınla paylaş; herkes aynı oda ID ile bağlandığında aynı tuvale düşer.
+          </p>
+          <div class="meta">
+            <span>Oda tabanlı maçlar</span>
+            <span>URL: <code>/pictionary/</code></span>
+          </div>
+          <div class="actions">
+            <a class="btn play" href="/pictionary/">
+              <span class="icon">▶</span>
+              Oyna
+            </a>
+            <button class="btn ghost" type="button" onclick="copyHint('pictionary')">
+              <span class="icon">ℹ️</span>
+              Nasıl oynanır?
+            </button>
+          </div>
+        </article>
+
+        <!-- Codenames -->
+        <article class="card card-codenames">
+          <div class="card-top">
+            <div class="card-title">
+              <div class="icon-chip">🧠</div>
+              <div class="card-title-text">
+                <strong>Codenames Lite</strong>
+                <span>Takım & ipucu</span>
+              </div>
+            </div>
+            <span class="tag">4+ oyuncu</span>
+          </div>
+          <p class="card-body">
+            Kırmızı ve Mavi takım, spymaster’ın verdiği tek kelimelik ipuçlarıyla kendi kelimelerini bulmaya çalışır.
+          </p>
+          <p class="card-hint">
+            Lobiye gir, takımını (kırmızı/mavi) ve rolünü (spymaster/oyuncu) seç; takımlar hazır olduğunda oyun başlar.
+          </p>
+          <div class="meta">
+            <span>Takım tabanlı strateji</span>
+            <span>URL: <code>/codenames/</code></span>
+          </div>
+          <div class="actions">
+            <a class="btn play" href="/codenames/">
+              <span class="icon">▶</span>
+              Oyna
+            </a>
+            <button class="btn ghost" type="button" onclick="copyHint('codenames')">
+              <span class="icon">📋</span>
+              Kurallar
+            </button>
+          </div>
+        </article>
+
+        <!-- Tic-Tac-Toe -->
+        <article class="card card-ttt">
+          <div class="card-top">
+            <div class="card-title">
+              <div class="icon-chip">❌</div>
+              <div class="card-title-text">
+                <strong>Tic-Tac-Toe</strong>
+                <span>1v1 klasik</span>
+              </div>
+            </div>
+            <span class="tag">2 oyuncu</span>
+          </div>
+          <p class="card-body">
+            X ve O karşı karşıya. Aynı oda kodunu giren iki oyuncu 3x3 tahtada kapışır.
+          </p>
+          <p class="card-hint">
+            Oda kodunu paylaş; bir oyuncu X, diğeri O olur. Hamleler anında karşı tarafa yansır.
+          </p>
+          <div class="meta">
+            <span>Hızlı maçlar</span>
+            <span>URL: <code>/ttt/</code></span>
+          </div>
+          <div class="actions">
+            <a class="btn play" href="/ttt/">
+              <span class="icon">▶</span>
+              Oyna
+            </a>
+            <button class="btn ghost" type="button" onclick="copyHint('ttt')">
+              <span class="icon">ℹ️</span>
+              Kısa bilgi
+            </button>
+          </div>
+        </article>
+
+        <!-- Pixelwar -->
+        <article class="card card-pixelwar">
+          <div class="card-top">
+            <div class="card-title">
+              <div class="icon-chip">🧱</div>
+              <div class="card-title-text">
+                <strong>Pixelwar</strong>
+                <span>Alan kapmaca</span>
+              </div>
+            </div>
+            <span class="tag">2+ oyuncu</span>
+          </div>
+          <p class="card-body">
+            Kareli bir haritada piksel boyar gibi alan kap; en çok alana sahip olan kazanır.
+          </p>
+          <p class="card-hint">
+            Oda kodunu paylaş, herkes aynı haritaya düşsün. Karelere tıkladıkça renkli çatışma başlar.
+          </p>
+          <div class="meta">
+            <span>Rekabetçi, hızlı turlar</span>
+            <span>URL: <code>/pixelwar/</code></span>
+          </div>
+          <div class="actions">
+            <a class="btn play" href="/pixelwar/">
+              <span class="icon">▶</span>
+              Oyna
+            </a>
+            <button class="btn ghost" type="button" onclick="copyHint('pixelwar')">
+              <span class="icon">🎮</span>
+              Oyun modu
+            </button>
+          </div>
+        </article>
+      </section>
+
+      <!-- FOOTER -->
       <footer>
-        <span>Bu sayfa, aynı sunucuda barınan mini oyunlara açılan giriş noktasıdır.</span>
-        <span>&copy; Game Hub</span>
+        <span><strong>Gameverse Arcade</strong> · WebSocket tabanlı sınıf içi mini oyun koleksiyonu.</span>
+        <span>Sunucu durumunu üst köşeden takip edebilirsin.</span>
       </footer>
     </div>
   </div>
 
   <script>
-    // Host göster
+    // Sunucu hostunu göster
     document.getElementById("hostText").textContent = location.host || "localhost";
 
-    // Sunucu durumu: /rooms endpoint'i ile health check
+    // Sunucu health check (/rooms endpoint)
     (function checkStatus(){
       const pill = document.getElementById("statusPill");
       fetch("/rooms")
@@ -451,27 +646,35 @@
         });
     })();
 
-    // Küçük "nasıl oynanır" açıklamaları
+    // Kısa oyun açıklamalarını panoya kopyala
     function copyHint(game){
       let text = "";
       if(game === "pictionary"){
         text =
 `Pictionary:
-- Oda ID belirle ve arkadaşlarınla paylaş.
-- Herkes aynı oda ID ile odaya bağlanır.
-- Sırayla bir oyuncu çizer, diğerleri tahmin yazar.`;
+- Bir oda ID belirle ve arkadaşlarınla paylaş.
+- Herkes aynı oda ID ile bağlanır.
+- Sırayla bir oyuncu çizer, diğerleri tahmin yazar.
+- Doğru tahminler skor tablosuna eklenir.`;
       } else if(game === "codenames"){
         text =
 `Codenames:
-- Lobiye gir, kırmızı veya mavi takım seç.
-- Rolünü spymaster veya operative olarak belirle.
-- Spymaster ipucu verir, takım arkadaşları doğru kelimeleri bulmaya çalışır.`;
+- Lobiye gir ve kırmızı ya da mavi takımı seç.
+- Rolünü spymaster veya oyuncu olarak belirle.
+- Spymaster tek kelimelik ipucu + sayı verir.
+- Oyuncular, ipucu ile ilişkili takım kelimelerini bulmaya çalışır.`;
       } else if(game === "ttt"){
         text =
 `Tic-Tac-Toe:
-- İki oyuncu aynı oda kodunu yazar.
+- İki oyuncu da aynı oda kodunu girer.
 - Bir oyuncu X, diğeri O olur.
-- Sırayla hamle yaparak üçlüyi tamamlamaya çalışırsın.`;
+- Sırayla hamle yaparak yatay/dikey/çapraz üçlü yapmaya çalışırsın.`;
+      } else if(game === "pixelwar"){
+        text =
+`Pixelwar:
+- Oda kodu oluştur, arkadaşlarınla paylaş.
+- Herkes aynı haritadaki kareleri kendi rengine boyar.
+- Tur bitiminde en çok alanı kaplayan oyuncu kazanır.`;
       }
 
       if(text && navigator.clipboard){
