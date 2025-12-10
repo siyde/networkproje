@@ -37,32 +37,23 @@ HTML dosyaları Nginx tarafından servis edilir, WebSocket trafiği /ws/... olar
 
 c) Dosya Düzenleme Komutları
 server.py düzenleme:
-cd ~/gameverse
+cd ~/networkproje
 sudo nano server.py
 
-Ana sayfa düzenleme (Arcade UI):
-sudo nano /var/www/gameverse/index.html
+Ana sayfa:
+nano /home/ubuntu/networkproje/static/index.html
 
-Oyun dosyaları düzenleme:
+Pictionary:
+nano /home/ubuntu/networkproje/static/pictionary/index.html
 
-Pictionary
+Codenames:
+nano /home/ubuntu/networkproje/static/codenames/index.html
 
-sudo nano /var/www/gameverse/pictionary/index.html
+Tic-Tac-Toe (ttt):
+nano /home/ubuntu/networkproje/static/ttt/index.html
 
-
-Codenames
-
-sudo nano /var/www/gameverse/codenames/index.html
-
-
-Tic-Tac-Toe
-
-sudo nano /var/www/gameverse/ttt/index.html
-
-
-PixelWar (Kare Kapmaca)
-
-sudo nano /var/www/gameverse/pixelwar/index.html
+Pixelwar:
+nano /home/ubuntu/networkproje/static/pixelwar/index.html
 
 d) Düzenleme Sonrası Yapılması Gerekenler (ÇOK ÖNEMLİ)
 
@@ -132,7 +123,7 @@ Server block:
 
 server_name gameverse-online.duckdns.org;
 
-root /var/www/gameverse;
+root /home/ubuntu/networkproje/static/
 index index.html;
 
 location / {
@@ -164,4 +155,4 @@ i) Kod Görüntüleme (cat komutu)
 
 Bir dosyayı sadece okumak için:
 
-cat /var/www/gameverse/codenames/index.html
+cat /home/ubuntu/networkproje/static/index.html
