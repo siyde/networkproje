@@ -1,5 +1,5 @@
 # server.py — Game Hub WS Sunucusu (Pictionary + TTT + Codenames + PixelWar)
-import asyncio, json, secrets, random, re, os
+import asyncio, json, secrets, random, re, os, math
 from typing import Dict
 from datetime import datetime
 
@@ -14,6 +14,20 @@ app.add_middleware(CORSMMiddleware := CORSMiddleware,
                    allow_headers=["*"],
                    allow_methods=["*"])
 
+# ====== Pictionary ======
+pictionary_rooms: Dict[str, dict] = {}
+
+# ====== Codenames ======
+codenames_rooms: Dict[str, dict] = {}
+
+# ====== Tic Tac Toe ======
+ttt_rooms: Dict[str, dict] = {}
+
+# ====== Pixelwar ======
+pixelwar_rooms: Dict[str, dict] = {}
+
+# ====== Sumo Bash (yuvarlak arena mini game) ======
+sumo_rooms: Dict[str, dict] = {}
 
 # ==========================
 # Pictionary (çok odalı)
@@ -31,7 +45,6 @@ PIC_WORDS = [
 # İstersen burada sabit toplam tur sayısı tanımlayabilirsin (sadece görsel amaçlı)
 PIC_TOTAL_ROUNDS = 10
 
-pic_rooms: Dict[str, dict] = {}
 
 def mask_word(w):
     # Kelimeyi "_ _ _" formatına çevir
@@ -427,7 +440,6 @@ async def pictionary_ws(ws: WebSocket):
 # ==========================
 # TicTacToe (çok odalı)
 # ==========================
-ttt_rooms = {}  # roomId -> room state dict
 
 def ttt_new_room(max_rounds: int = 1):
     return {
@@ -659,7 +671,6 @@ def cn_new_board():
         "spymaster":{"red":None,"blue":None}
     }
 
-cn_rooms = {}  # roomId -> state
 
 async def cn_broadcast(room, payload):
     dead=[]
@@ -850,7 +861,6 @@ async def cn_ws(ws: WebSocket):
 # ==========================
 # Pixel War (Kare Kapmaca)
 # ==========================
-pixel_rooms = {}
 GRID_SIZE = 36
 COLORS = ["#e74c3c", "#3498db", "#f1c40f", "#9b59b6", "#2ecc71", "#e67e22"]
 
@@ -1372,6 +1382,310 @@ async def liars_ws(ws: WebSocket):
                         "players": {p: {"name": room["players"][p]["name"]} for p in room["players"]}
                     })
 
+# ==========================
+# Sumo Bash (yuvarlak arena mini game)
+# ==========================
+
+def make_sumo_room(room_id: str) -> dict:
+    return {
+        "roomId": room_id,
+        "players": {},      # pid -> {name, ws, x, y, alive, color, wins}
+        "phase": "waiting", # "waiting" | "playing" | "finished"
+        "arena_radius": 200.0,
+        "min_radius": 90.0,
+        "shrink_speed": 12.0,   # saniyede kaç px küçülsün
+        "last_update": None,
+        "host_pid": None,
+    }
+
+def sumo_random_color() -> str:
+    palette = ["#f97316", "#22c55e", "#0ea5e9", "#a855f7", "#facc15", "#f97373"]
+    return random.choice(palette)
+
+def sumo_random_spawn(room: dict) -> tuple[float, float]:
+    r = room.get("arena_radius", 200.0) * 0.55
+    ang = random.uniform(0, math.tau)
+    return math.cos(ang) * r, math.sin(ang) * r
+
+async def sumo_info(room: dict, text: str):
+    msg = json.dumps({"type": "info", "msg": text})
+    for p in list(room["players"].values()):
+        ws: WebSocket = p.get("ws")
+        if not ws:
+            continue
+        try:
+            await ws.send_text(msg)
+        except Exception:
+            pass
+
+def sumo_broadcast_state(room: dict, info: str | None = None, winner: str | None = None):
+    players_view = {}
+    for pid, p in room["players"].items():
+        players_view[pid] = {
+            "name": p["name"],
+            "x": float(p.get("x", 0.0)),
+            "y": float(p.get("y", 0.0)),
+            "color": p.get("color"),
+            "alive": bool(p.get("alive", True)),
+            "wins": int(p.get("wins", 0)),
+        }
+
+    msg = {
+        "type": "state",
+        "phase": room.get("phase", "waiting"),
+        "arena": {"radius": float(room.get("arena_radius", 200.0))},
+        "players": players_view,
+        "winner": winner,
+        "canStart": len(room["players"]) >= 2 and room.get("phase") in ("waiting", "finished"),
+    }
+    if info:
+        msg["info"] = info
+
+    txt = json.dumps(msg)
+    for p in list(room["players"].values()):
+        ws: WebSocket = p.get("ws")
+        if not ws:
+            continue
+        try:
+            asyncio.create_task(ws.send_text(txt))
+        except Exception:
+            pass
+
+def sumo_update_arena_shrink(room: dict):
+    """Oyun oynanırken süre geçtikçe arenayı küçült."""
+    if room.get("phase") != "playing":
+        room["last_update"] = None
+        return
+    now = datetime.utcnow().timestamp()
+    last = room.get("last_update")
+    room["last_update"] = now
+    if last is None:
+        return
+    dt = max(0.0, now - last)
+    shrink_speed = float(room.get("shrink_speed", 12.0))
+    min_r = float(room.get("min_radius", 90.0))
+    r = float(room.get("arena_radius", 200.0))
+    if r <= min_r:
+        room["arena_radius"] = min_r
+        return
+    r -= shrink_speed * dt
+    if r < min_r:
+        r = min_r
+    room["arena_radius"] = r
+
+def sumo_resolve_collisions(room: dict, mover_pid: str, ball_radius: float = 18.0):
+    """
+    Çarpışan oyuncuları birbirinden güçlü şekilde iter.
+    Vuran oyuncu az, vurulan oyuncu çok geri gider (knockback).
+    """
+    p = room["players"].get(mover_pid)
+    if not p or not p.get("alive", True):
+        return
+
+    for pid2, other in room["players"].items():
+        if pid2 == mover_pid:
+            continue
+        if not other.get("alive", True):
+            continue
+
+        # Vurandan hedefe doğru vektör
+        dx = other["x"] - p["x"]
+        dy = other["y"] - p["y"]
+        dist = math.hypot(dx, dy)
+        if dist == 0:
+            dist = 0.001  # sıfıra bölme olmasın
+
+        min_dist = ball_radius * 2.0  # iki topun normalde olması gereken minimum mesafe
+        if dist < min_dist:
+            # Ne kadar iç içe girdik? + ekstra bonus itme ekleyelim ki hissedilsin
+            overlap = (min_dist - dist) + 12.0
+
+            ux = dx / dist  # vurandan hedefe doğru birim vektör
+            uy = dy / dist
+
+            # Vurulan: ileri doğru güçlü itilsin
+            hit_push = overlap * 0.9
+            # Vuran: geri doğru hafifçe geri sekecek
+            self_push = overlap * 0.35
+
+            # Vuranı geri doğru it (tam tersi yönde)
+            p["x"] -= ux * self_push
+            p["y"] -= uy * self_push
+
+            # Vurulanı ileri doğru it
+            other["x"] += ux * hit_push
+            other["y"] += uy * hit_push
+
+def sumo_check_eliminations(room: dict):
+    radius = float(room.get("arena_radius", 200.0))
+    for p in room["players"].values():
+        if not p.get("alive", True):
+            continue
+        dist = math.hypot(p.get("x", 0.0), p.get("y", 0.0))
+        if dist > radius:
+            p["alive"] = False
+
+    alive = [p for p in room["players"].values() if p.get("alive", False)]
+    if room.get("phase") == "playing" and len(alive) <= 1:
+        room["phase"] = "finished"
+        winner = None
+        if alive:
+            alive[0]["wins"] = alive[0].get("wins", 0) + 1
+            winner = alive[0]["name"]
+        return winner
+    return None
+
+
+@app.websocket("/ws/sumobash")
+async def ws_sumobash(ws: WebSocket):
+    await ws.accept()
+    pid = secrets.token_hex(4)
+    room_id = None
+
+    try:
+        while True:
+            raw = await ws.receive_text()
+            msg = json.loads(raw)
+            typ = msg.get("type")
+
+            # ---- join ----
+            if typ == "join":
+                room_id = (msg.get("roomId") or "").strip()
+                name = (msg.get("name") or "anon").strip() or "anon"
+
+                if not room_id:
+                    await ws.send_text(json.dumps({"type": "join_error", "reason": "no_room"}))
+                    continue
+
+                room = sumo_rooms.get(room_id)
+                if room is None:
+                    room = make_sumo_room(room_id)
+                    sumo_rooms[room_id] = room
+
+                is_host = False
+                if not room["players"]:
+                    room["host_pid"] = pid
+                    is_host = True
+
+                x, y = sumo_random_spawn(room)
+                room["players"][pid] = {
+                    "name": name,
+                    "ws": ws,
+                    "x": x,
+                    "y": y,
+                    "alive": True,
+                    "color": sumo_random_color(),
+                    "wins": 0,
+                }
+
+                await ws.send_text(json.dumps({
+                    "type": "joined",
+                    "pid": pid,
+                    "roomId": room_id,
+                    "isHost": is_host,
+                    "name": name,
+                }))
+
+                await sumo_info(room, f"{name} odaya katıldı.")
+                sumo_broadcast_state(room, info="Oyuncular hazır olduğunda host oyunu başlatabilir.")
+                continue
+
+            # join gelmediyse
+            if room_id is None:
+                await ws.send_text(json.dumps({"type": "info", "msg": "Önce join gönder."}))
+                continue
+
+            room = sumo_rooms.get(room_id)
+            if not room:
+                await ws.send_text(json.dumps({"type": "info", "msg": "Oda bulunamadı."}))
+                continue
+
+            # Her mesajda arena küçülmesini güncelle
+            sumo_update_arena_shrink(room)
+
+            # ---- start ----
+            if typ == "start":
+                if pid != room.get("host_pid"):
+                    await ws.send_text(json.dumps({"type": "info", "msg": "Yalnızca host oyunu başlatabilir."}))
+                    continue
+                if len(room["players"]) < 2:
+                    await ws.send_text(json.dumps({"type": "info", "msg": "En az 2 oyuncu gerekli."}))
+                    continue
+
+                room["phase"] = "playing"
+                room["arena_radius"] = 200.0
+                room["last_update"] = None
+                for p in room["players"].values():
+                    p["alive"] = True
+                    p["x"], p["y"] = sumo_random_spawn(room)
+
+                sumo_broadcast_state(room, info="Oyun başladı! Arena yavaş yavaş daralıyor, düşmemeye çalışın.")
+                continue
+
+            # ---- reset ----
+            if typ == "reset":
+                if pid != room.get("host_pid"):
+                    await ws.send_text(json.dumps({"type": "info", "msg": "Yalnızca host yeni tur başlatabilir."}))
+                    continue
+                room["phase"] = "waiting"
+                room["arena_radius"] = 200.0
+                room["last_update"] = None
+                for p in room["players"].values():
+                    p["alive"] = True
+                    p["x"], p["y"] = sumo_random_spawn(room)
+                sumo_broadcast_state(room, info="Yeni tur için hazır. Host oyunu başlatabilir.")
+                continue
+
+            # ---- move ----
+            if typ == "move":
+                if room.get("phase") != "playing":
+                    continue
+                p = room["players"].get(pid)
+                if not p or not p.get("alive", True):
+                    continue
+
+                try:
+                    nx = float(msg.get("x", p["x"]))
+                    ny = float(msg.get("y", p["y"]))
+                except (TypeError, ValueError):
+                    continue
+
+                p["x"] = nx
+                p["y"] = ny
+
+                sumo_resolve_collisions(room, pid)
+                winner = sumo_check_eliminations(room)
+
+                if winner:
+                    sumo_broadcast_state(room, info=f"Tur bitti! Kazanan: {winner}", winner=winner)
+                else:
+                    sumo_broadcast_state(room)
+                continue
+
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        # loglamak istersen buraya print ya da logger koyabilirsin
+        pass
+    finally:
+        if room_id and room_id in sumo_rooms:
+            room = sumo_rooms[room_id]
+            player = room["players"].pop(pid, None)
+            if player:
+                try:
+                    asyncio.create_task(sumo_info(room, f"{player['name']} oyundan ayrıldı."))
+                except Exception:
+                    pass
+
+            if pid == room.get("host_pid"):
+                new_host = next(iter(room["players"]), None)
+                room["host_pid"] = new_host
+
+            if not room["players"]:
+                sumo_rooms.pop(room_id, None)
+            else:
+                sumo_broadcast_state(room, info="Bir oyuncu oyundan ayrıldı.")
+
 
 # ==========================
 # Health / Rooms
@@ -1387,6 +1701,14 @@ def list_rooms():
         out.append({"game":"pictionary","roomId":rid,"players":len(r["players"]),"started":r.get("started",False),"secondsLeft":r.get("seconds_left",0)})
     for rid, r in ttt_rooms.items():
         out.append({"game":"ttt","roomId":rid,"players":len(r["players"])})
+    for rid, r in sumo_rooms.items():
+        out.append({
+            "game": "sumobash",
+            "roomId": rid,
+            "players": len(r["players"]),
+            "phase": r.get("phase", "waiting")
+        })
+
 
     for rid, r in cn_rooms.items():
         if r.get("phase")=="lobby":
