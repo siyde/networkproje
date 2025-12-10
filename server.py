@@ -946,6 +946,433 @@ async def pixel_ws(ws: WebSocket):
             room["players"] = [p for p in room["players"] if p["pid"] != pid]
             if not room["players"]: del pixel_rooms[room_id]
 
+
+# ==========================
+# LIAR'S BAR
+# ==========================
+liars_rooms = {}
+
+def liars_new_room():
+    return {
+        "players": {},           # pid -> {name, ws, cards[], alive, position}
+        "phase": "lobby",        # lobby, playing, roulette, game_over
+        "turn": None,            # Sıradaki oyuncu pid
+        "turn_order": [],        # Oyuncu sırası
+        "current_claim": None,   # {card: "Q/K/A/JOKER", count: 1-4, pid: ""}
+        "pile": [],              # Masadaki kartlar {card: "Q/K/A/JOKER", pid: ""}
+        "roulette": None,        # {chamber: 0-5, current: 0, victim: pid}
+        "deck": []               # Kalan kartlar
+    }
+
+def liars_create_deck():
+    """32 kart: Q,K,A'dan 10'ar + 2 Joker"""
+    deck = []
+    for card_type in ['Q', 'K', 'A']:
+        deck.extend([card_type] * 10)
+    deck.extend(['JOKER'] * 2)
+    random.shuffle(deck)
+    return deck
+
+async def liars_broadcast(room, payload):
+    msg = json.dumps(payload)
+    dead = []
+    for pid, pl in list(room["players"].items()):
+        ws = pl["ws"]
+        try:
+            await ws.send_text(msg)
+        except Exception:
+            dead.append(pid)
+    for pid in dead:
+        room["players"].pop(pid, None)
+
+async def liars_push_state(room):
+    """Her oyuncuya kendi kartlarını ve genel durumu gönder"""
+    alive_players = {pid: {"name": pl["name"], "alive": pl["alive"], "card_count": len(pl["cards"]), "position": pl["position"], "shots_used": pl.get("shots_used", 0)}
+                     for pid, pl in room["players"].items()}
+
+    for pid, pl in room["players"].items():
+        ws = pl["ws"]
+        try:
+            # Sadece hayattaysa kendi kartlarını göster, ölüyse boş liste
+            my_cards = pl["cards"] if pl["alive"] else []
+
+            state = {
+                "type": "state",
+                "phase": room["phase"],
+                "players": alive_players,
+                "my_cards": my_cards,
+                "my_alive": pl["alive"],
+                "turn": room["turn"],
+                "current_claim": room["current_claim"],
+                "pile_count": len(room["pile"]),
+                "round_card": room.get("round_card")  # Turda atılacak kart
+            }
+            await ws.send_text(json.dumps(state))
+        except:
+            pass
+
+def liars_start_game(room):
+    """Oyunu başlat - kartları dağıt"""
+    if len(room["players"]) < 2:
+        return False
+
+    # Desteden oluştur ve karıştır
+    room["deck"] = liars_create_deck()
+
+    # Her oyuncuya 8 kart dağıt
+    pids = list(room["players"].keys())
+    for i, pid in enumerate(pids):
+        room["players"][pid]["cards"] = [room["deck"].pop() for _ in range(8)]
+        room["players"][pid]["alive"] = True
+        room["players"][pid]["position"] = i
+        room["players"][pid]["shots_used"] = 0  # Kullanılan mermi sayısı
+
+    room["turn_order"] = pids.copy()
+    room["turn"] = random.choice(pids)  # Rastgele oyuncudan başla
+    room["phase"] = "playing"
+    room["pile"] = []
+    room["current_claim"] = None
+    room["round_card"] = random.choice(["Q", "K", "A"])  # Turda atılacak kart türü
+
+    return True
+
+def liars_next_turn(room):
+    """Sıradaki canlı oyuncuya geç"""
+    if not room["turn_order"]:
+        return
+
+    current_idx = room["turn_order"].index(room["turn"]) if room["turn"] in room["turn_order"] else -1
+
+    for i in range(1, len(room["turn_order"]) + 1):
+        next_idx = (current_idx + i) % len(room["turn_order"])
+        next_pid = room["turn_order"][next_idx]
+        if room["players"][next_pid]["alive"]:
+            room["turn"] = next_pid
+            return
+
+    # Hiç canlı oyuncu kalmadıysa
+    room["phase"] = "game_over"
+
+def liars_check_winner(room):
+    """Kazananı kontrol et"""
+    alive = [pid for pid, pl in room["players"].items() if pl["alive"]]
+    if len(alive) == 1:
+        room["phase"] = "game_over"
+        return alive[0]
+    return None
+
+async def liars_start_roulette(room, victim_pid):
+    """Rusça rulet başlat"""
+    # Kullanılan mermi sayısına göre şans hesapla
+    shots_used = room["players"][victim_pid].get("shots_used", 0)
+    # Kalan namlu sayısı: 6 - (shots_used % 6)
+    remaining_chambers = 6 - (shots_used % 6)
+
+    # Mermi pozisyonu: 0 ile (remaining_chambers - 1) arası
+    chamber = random.randint(0, remaining_chambers - 1) if remaining_chambers > 0 else 0
+
+    room["roulette"] = {
+        "chamber": chamber,
+        "current": 0,
+        "victim": victim_pid,
+        "remaining_chambers": remaining_chambers
+    }
+    room["phase"] = "roulette"
+
+    await liars_broadcast(room, {
+        "type": "roulette_start",
+        "victim": victim_pid,
+        "victim_name": room["players"][victim_pid]["name"],
+        "chamber": 1,  # İlk çekiş
+        "shots_used": shots_used  # Şu ana kadar kullanılan mermi
+    })
+
+async def liars_pull_trigger(room):
+    """Tetiği çek"""
+    roulette = room["roulette"]
+    victim_pid = roulette["victim"]
+    remaining_chambers = roulette.get("remaining_chambers", 6)
+
+    # Mevcut çekiş remaining_chambers'ı aştıysa, kesinlikle ölme
+    is_shot = roulette["current"] == roulette["chamber"] and roulette["current"] < remaining_chambers
+    roulette["current"] += 1
+
+    # Mermi kullanımını artır
+    if victim_pid in room["players"]:
+        room["players"][victim_pid]["shots_used"] = room["players"][victim_pid].get("shots_used", 0) + 1
+
+    if is_shot:
+        # Oyuncu öldü
+        room["players"][victim_pid]["alive"] = False
+        room["players"][victim_pid]["cards"] = []  # Kartlarını temizle
+
+        await liars_broadcast(room, {
+            "type": "roulette_result",
+            "victim": victim_pid,
+            "shot": True,
+            "chamber": roulette["current"],  # Kaçıncı çekişte patladı
+            "shots_used": room["players"][victim_pid].get("shots_used", 0)  # Toplam kullanılan mermi
+        })
+
+        await asyncio.sleep(2)  # Animasyon için bekleme
+
+        # Kazanan var mı?
+        winner = liars_check_winner(room)
+        if winner:
+            await liars_broadcast(room, {
+                "type": "game_over",
+                "winner": winner,
+                "winner_name": room["players"][winner]["name"]
+            })
+        else:
+            # Oyuna devam - yeni tur, yeni kartlar dağıt
+            room["phase"] = "playing"
+            caller_pid = room["roulette"].get("caller")  # Blöf diyen kişi
+            room["roulette"] = None
+            room["pile"] = []
+            room["current_claim"] = None
+            room["round_card"] = random.choice(["Q", "K", "A"])  # Yeni kart türü
+
+            # Canlı oyunculara yeni kartlar dağıt (komple yenile)
+            alive_players = [pid for pid, pl in room["players"].items() if pl["alive"]]
+
+            # Yeni deste oluştur
+            room["deck"] = liars_create_deck()
+
+            # Her canlı oyuncuya yeni 8 kart dağıt (eskilerini sil)
+            for pid in alive_players:
+                room["players"][pid]["cards"] = []
+                for _ in range(8):
+                    if room["deck"]:
+                        room["players"][pid]["cards"].append(room["deck"].pop())
+
+            # Sıra blöf diyende (eğer hayattaysa)
+            if caller_pid and caller_pid in alive_players:
+                room["turn"] = caller_pid
+            else:
+                liars_next_turn(room)
+            await liars_push_state(room)
+    else:
+        # Kurtuldu
+        await liars_broadcast(room, {
+            "type": "roulette_result",
+            "victim": victim_pid,
+            "shot": False,
+            "chamber": roulette["current"],  # Şu anki pozisyon (kaçıncı çekiş)
+            "shots_used": room["players"][victim_pid].get("shots_used", 0)  # Toplam kullanılan mermi
+        })
+
+        await asyncio.sleep(1)  # Animasyon için bekleme
+
+        # Oyuna devam et - yeni tur, yeni kartlar dağıt
+        room["phase"] = "playing"
+        caller_pid = room["roulette"].get("caller")  # Blöf diyen kişi
+        room["roulette"] = None
+        room["pile"] = []
+        room["current_claim"] = None
+        room["round_card"] = random.choice(["Q", "K", "A"])  # Yeni kart türü
+
+        # Canlı oyunculara yeni kartlar dağıt (komple yenile)
+        alive_players = [pid for pid, pl in room["players"].items() if pl["alive"]]
+
+        # Yeni deste oluştur
+        room["deck"] = liars_create_deck()
+
+        # Her canlı oyuncuya yeni 8 kart dağıt (eskilerini sil)
+        for pid in alive_players:
+            room["players"][pid]["cards"] = []
+            for _ in range(8):
+                if room["deck"]:
+                    room["players"][pid]["cards"].append(room["deck"].pop())
+
+        # Sıra blöf diyende (eğer hayattaysa)
+        if caller_pid and caller_pid in alive_players:
+            room["turn"] = caller_pid
+        else:
+            liars_next_turn(room)
+        await liars_push_state(room)
+
+@app.websocket("/ws/liars")
+async def liars_ws(ws: WebSocket):
+    await ws.accept()
+    pid = secrets.token_hex(3)
+    room_id = None
+
+    try:
+        while True:
+            data = json.loads(await ws.receive_text())
+            typ = data.get("type")
+
+            if typ == "join":
+                room_id = data["roomId"]
+                name = data.get("name", "Oyuncu")[:24]
+                mode = data.get("mode", "join")
+
+                if room_id not in liars_rooms and mode != "create":
+                    await ws_send(ws, {"type": "join_error", "reason": "no_such_room"})
+                    continue
+
+                if room_id in liars_rooms and mode == "create":
+                    await ws_send(ws, {"type": "join_error", "reason": "room_exists", "msg": "Bu oda zaten mevcut!"})
+                    continue
+
+                if room_id not in liars_rooms:
+                    liars_rooms[room_id] = liars_new_room()
+
+                room = liars_rooms[room_id]
+
+                if room["phase"] != "lobby":
+                    await ws_send(ws, {"type": "join_error", "reason": "game_in_progress", "msg": "Oyun devam ediyor!"})
+                    continue
+
+                if len(room["players"]) >= 6:
+                    await ws_send(ws, {"type": "join_error", "reason": "room_full", "msg": "Oda dolu!"})
+                    continue
+
+                existing_names = [pl["name"] for pl in room["players"].values()]
+                if name in existing_names:
+                    await ws_send(ws, {"type": "join_error", "reason": "name_taken", "msg": f"'{name}' ismi kullanılıyor!"})
+                    continue
+
+                room["players"][pid] = {
+                    "name": name,
+                    "ws": ws,
+                    "cards": [],
+                    "alive": True,
+                    "position": 0
+                }
+
+                await ws_send(ws, {"type": "joined", "pid": pid})
+                await liars_broadcast(room, {
+                    "type": "lobby_update",
+                    "players": {p: {"name": room["players"][p]["name"]} for p in room["players"]}
+                })
+
+            elif typ == "start_game" and room_id:
+                room = liars_rooms.get(room_id)
+                if not room or room["phase"] != "lobby":
+                    continue
+
+                if len(room["players"]) < 2:
+                    await ws_send(ws, {"type": "info", "msg": "En az 2 oyuncu gerekli!"})
+                    continue
+
+                if liars_start_game(room):
+                    await liars_push_state(room)
+
+            elif typ == "play_cards" and room_id:
+                room = liars_rooms.get(room_id)
+                if not room or room["phase"] != "playing" or room["turn"] != pid:
+                    continue
+
+                card_indices = data.get("card_indices", [])  # Atılacak kartların indeksleri
+
+                if not card_indices or len(card_indices) > 4:
+                    continue
+
+                # Sunucu tarafından belirlenen kart türünü kullan
+                claimed_card = room.get("round_card", "Q")
+
+                player = room["players"][pid]
+
+                # Kartları kontrol et ve ata
+                played_cards = []
+                for idx in sorted(card_indices, reverse=True):
+                    if 0 <= idx < len(player["cards"]):
+                        card = player["cards"].pop(idx)
+                        played_cards.append(card)
+                        room["pile"].append({"card": card, "pid": pid})
+
+                room["current_claim"] = {
+                    "card": claimed_card,
+                    "count": len(played_cards),
+                    "pid": pid
+                }
+
+                # Tüm kartları bitirdiyse kazandı
+                if len(player["cards"]) == 0:
+                    room["phase"] = "game_over"
+                    await liars_broadcast(room, {
+                        "type": "game_over",
+                        "winner": pid,
+                        "winner_name": player["name"]
+                    })
+                else:
+                    liars_next_turn(room)
+                    await liars_push_state(room)
+                    await liars_broadcast(room, {
+                        "type": "play_made",
+                        "player": pid,
+                        "player_name": player["name"],
+                        "claim": room["current_claim"]
+                    })
+
+            elif typ == "call_liar" and room_id:
+                room = liars_rooms.get(room_id)
+                if not room or room["phase"] != "playing" or not room["current_claim"]:
+                    continue
+
+                caller_player = room["players"].get(pid)
+                if not caller_player or not caller_player["alive"]:
+                    continue
+
+                claim = room["current_claim"]
+                claimer_pid = claim["pid"]
+                claimed_card = claim["card"]
+
+                # Oyuncu kendine yalan diyemez
+                if pid == claimer_pid:
+                    await ws_send(ws, {"type": "info", "msg": "Kendine yalan diyemezsin!"})
+                    continue
+
+                # Pile'daki son atılan kartları kontrol et
+                last_cards = room["pile"][-claim["count"]:]
+
+                # Joker ve iddia edilen kartı kabul et
+                is_valid = all(c["card"] == claimed_card or c["card"] == "JOKER" for c in last_cards)
+
+                await liars_broadcast(room, {
+                    "type": "liar_called",
+                    "caller": pid,
+                    "caller_name": caller_player["name"],
+                    "claimer": claimer_pid,
+                    "cards_revealed": [c["card"] for c in last_cards],
+                    "valid": is_valid
+                })
+
+                # Rusça rulet
+                victim = claimer_pid if not is_valid else pid
+                await liars_start_roulette(room, victim)
+                # Blöf diyen kişiyi kaydet
+                room["roulette"]["caller"] = pid
+
+            elif typ == "pull_trigger" and room_id:
+                room = liars_rooms.get(room_id)
+                if not room or room["phase"] != "roulette":
+                    continue
+
+                if room["roulette"]["victim"] != pid:
+                    continue
+
+                await liars_pull_trigger(room)
+
+    except WebSocketDisconnect:
+        pass
+    finally:
+        if room_id and room_id in liars_rooms:
+            room = liars_rooms[room_id]
+            room["players"].pop(pid, None)
+
+            if not room["players"]:
+                liars_rooms.pop(room_id, None)
+            else:
+                if room["phase"] == "lobby":
+                    await liars_broadcast(room, {
+                        "type": "lobby_update",
+                        "players": {p: {"name": room["players"][p]["name"]} for p in room["players"]}
+                    })
+
+
 # ==========================
 # Health / Rooms
 # ==========================
