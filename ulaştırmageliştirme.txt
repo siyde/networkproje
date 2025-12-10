@@ -1,67 +1,167 @@
-a) 
-LobiSunucusuAnahtar.pem dosyasının olduğu klasörde (veya anahtarın bulunduğu dizine gidin) powershell ve linux açın
-ssh -i LobiSunucusuAnahtar.pem ubuntu@13.53.148.181 #bununla sanal bilgisayara bağlanıyoruz
-permisson denied hatası alırsanız:
-chmod 400 LobiSunucusuAnahtar.pem #yazıp tekrar üstteki kodu yazın
+(Yeni AWS, Nginx, SSL, oyun yapısı ve domain yapılandırmalarına göre düzenlenmiştir.)
 
-b) 
-genel yapı(TTT şu an yok sadece kart olarak gözüküyor):
-/home/ubuntu/pictionary/
-│
-├── server.py                      # Tüm oyunların (Pictionary, Codenames, TTT) backend'i
-│
-└── /var/www/gamesite/games/
-     ├── pictionary/               # Pictionary HTML istemcisi
-     ├── codenames/                # Codenames HTML istemcisi
-     └── ttt/                      # TicTacToe HTML istemcisi
+a) Sunucuya (AWS EC2) Bağlanma
 
-c) 
-dosya düzenleme sudo nano ile:
-sever.py için
-cd ~/pictionary
+Anahtar dosyasının bulunduğu klasöre gidip terminal aç:
+
+ssh -i NetworkAnahtar.pem ubuntu@52.59.239.82
+
+Eğer Permission denied alırsan:
+chmod 400 NetworkAnahtar.pem
+
+
+Sonra tekrar bağlanmayı dene.
+
+b) Proje Dosya Yapısı (Güncel)
+
+Sunucuda proje:
+
+/home/ubuntu/gameverse/
+│
+├── server.py                 # Tüm oyunların FastAPI + WebSocket backend’i
+│
+└── /var/www/gameverse/
+       ├── index.html         # Ana sayfa (Arcade UI)
+       ├── pictionary/
+       │     └── index.html
+       ├── codenames/
+       │     └── index.html
+       ├── ttt/
+       │     └── index.html
+       └── pixelwar/
+             └── index.html
+
+
+Bu klasör yapısı birebir şu anda çalışan mimaridir.
+HTML dosyaları Nginx tarafından servis edilir, WebSocket trafiği /ws/... olarak server.py tarafından yönetilir.
+
+c) Dosya Düzenleme Komutları
+server.py düzenleme:
+cd ~/gameverse
 sudo nano server.py
 
-codenames in html dosyası için
-sudo nano /var/www/gamesite/games/codenames/index.html
+Ana sayfa düzenleme (Arcade UI):
+sudo nano /var/www/gameverse/index.html
 
-pictionary html dosyası için
-sudo nano /var/www/gamesite/games/pictionary/index.html
+Oyun dosyaları düzenleme:
 
-d) 
-!!!!!!!!!!!!!!değişikliklerden sonra UNUTMAYIN!!!!!!!!!!!!!
+Pictionary
+
+sudo nano /var/www/gameverse/pictionary/index.html
+
+
+Codenames
+
+sudo nano /var/www/gameverse/codenames/index.html
+
+
+Tic-Tac-Toe
+
+sudo nano /var/www/gameverse/ttt/index.html
+
+
+PixelWar (Kare Kapmaca)
+
+sudo nano /var/www/gameverse/pixelwar/index.html
+
+d) Düzenleme Sonrası Yapılması Gerekenler (ÇOK ÖNEMLİ)
+
+Her nano işleminden sonra mutlaka:
+
 Ctrl + O → Enter (kaydet)
-Ctrl + X (çıkış)
+Ctrl + X (çık)
 
-sadece index.html leri değiştirdiyseniz bunu yaz:
-sudo nginx -t && sudo systemctl reload nginx 
+🔵 Sadece HTML dosyası değiştirdiysen:
 
-server.py yi değiştirdiyseniz serverı tekrar sürekli açık yapmak için
-sudo systemctl restart pictionary
-sudo systemctl status pictionary #----> burada active(running) yazmalı 
+Nginx test + reload:
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+sudo nginx -t && sudo systemctl reload nginx
 
-e)
-yeni oyun yapacağın zaman mesela wordchain olsun bu şekilde dosya oluşturabilirsiniz ayrı kalmasın
-sudo mkdir /var/www/gamesite/games/wordchain
-sudo nano /var/www/gamesite/games/wordchain/index.html
+🔴 server.py değiştiyse:
 
-f)
-Bu sistemin altyapısı:
-FastAPI (Python) ile WebSocket tabanlı çok oyunculu oyun sunucusu
-Nginx ile static dosya servisi
-Systemd servis olarak otomatik başlatma
-AWS EC2 (Ubuntu 22.04) üzerinde çalışıyor
+Gameverse servisinin yeniden başlatılması gerekir:
 
-g)
-AWS giriş(büyük ihtimalle ihtiyacınız olmaz):
-root girişi
-suimdat2002@gmail.com 
-NetworkProje123
+sudo systemctl restart gameverse
+sudo systemctl status gameverse   # active (running) olmalı
 
-EC2 Public IP: 13.53.148.181
-http adresimiz:
-http://13.53.148.181/
+e) Yeni Oyun Eklemek (Örnek: “wordchain”)
+
+Yeni bir oyun klasörü eklemek istersen:
+
+sudo mkdir /var/www/gameverse/wordchain
+sudo nano /var/www/gameverse/wordchain/index.html
 
 
-cat dosya yolu //kodu kopyalamak için
+WebSocket endpoint'i server.py içinde:
+
+@app.websocket("/ws/wordchain")
+
+
+Bu şekilde tüm oyunlar tek backend içinde toplanır.
+
+f) Sistemin Altyapısı
+
+Bu proje şu mimariyle çalışır:
+
+FastAPI → Python tabanlı HTTP + WebSocket oyun sunucusu
+
+Nginx → Static dosyalar (HTML/CSS/JS) + WebSocket proxy
+
+Systemd service → server.py arka planda sürekli çalışır
+
+AWS EC2 (Ubuntu 22.04) → Sunucu ortamı
+
+DuckDNS + Let’s Encrypt SSL →
+HTTPS + WSS WebSocket için gereklidir
+(Siten: https://gameverse-online.duckdns.org
+)
+
+g) Nginx Domain ve SSL Yapılandırması (Güncel)
+
+Domain:
+
+gameverse-online.duckdns.org
+
+
+Nginx ayarı:
+
+sudo nano /etc/nginx/sites-available/gameverse
+
+
+Server block:
+
+server_name gameverse-online.duckdns.org;
+
+root /var/www/gameverse;
+index index.html;
+
+location / {
+    try_files $uri $uri/ /index.html;
+}
+
+location /ws/ {
+    proxy_pass http://127.0.0.1:8000/ws/;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+}
+
+SSL alma:
+sudo apt install certbot python3-certbot-nginx -y
+sudo certbot --nginx -d gameverse-online.duckdns.org
+
+h) AWS / EC2 Bilgileri (Özel değil, öğrenci içindir)
+
+IP adresin:
+
+52.59.239.82
+
+
+Web adresi:
+
+https://gameverse-online.duckdns.org
+
+i) Kod Görüntüleme (cat komutu)
+
+Bir dosyayı sadece okumak için:
+
+cat /var/www/gameverse/codenames/index.html
