@@ -16,11 +16,11 @@ b) Proje Dosya Yapısı (Güncel)
 
 Sunucuda proje:
 
-/home/ubuntu/gameverse/
+/home/ubuntu/networkproje/
 │
 ├── server.py                 # Tüm oyunların FastAPI + WebSocket backend’i
 │
-└── /var/www/gameverse/
+└── /static/
        ├── index.html         # Ana sayfa (Arcade UI)
        ├── pictionary/
        │     └── index.html
@@ -72,8 +72,8 @@ sudo nginx -t && sudo systemctl reload nginx
 
 Gameverse servisinin yeniden başlatılması gerekir:
 
-sudo systemctl restart gameverse
-sudo systemctl status gameverse   # active (running) olmalı
+sudo systemctl restart gamehub
+sudo systemctl status gamehub   # active (running) olmalı
 
 e) Yeni Oyun Eklemek (Örnek: “wordchain”)
 
