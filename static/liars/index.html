@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Liar's Bar</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Georgia', serif;
+            background: linear-gradient(135deg, #1a0000 0%, #330000 50%, #1a0000 100%);
+            min-height: 100vh;
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #app {
+            width: 95%;
+            max-width: 1400px;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            font-size: 3em;
+            color: #ffd700;
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+            margin-bottom: 30px;
+            font-style: italic;
+        }
+        .screen { display: none; }
+        .screen.active { display: block; }
+        
+        /* Join Screen */
+        .join-form {
+            max-width: 500px;
+            margin: 0 auto;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 40px;
+            border-radius: 15px;
+            border: 2px solid #ffd700;
+        }
+        .join-form input {
+            width: 100%;
+            padding: 15px;
+            margin: 15px 0;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid #ffd700;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 18px;
+        }
+        .join-form button {
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            background: #ffd700;
+            color: #1a0000;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .join-form button:hover {
+            background: #ffed4e;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 215, 0, 0.5);
+        }
+        
+        /* Lobby */
+        .lobby-container {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 40px;
+            border-radius: 15px;
+            border: 2px solid #ffd700;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .players-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 30px 0;
+        }
+        .player-card {
+            background: rgba(255, 215, 0, 0.2);
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid #ffd700;
+            text-align: center;
+            font-size: 20px;
+        }
+        .start-btn {
+            width: 100%;
+            padding: 20px;
+            background: #00ff00;
+            color: #000;
+            border: none;
+            border-radius: 10px;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .start-btn:hover {
+            background: #00cc00;
+            transform: scale(1.05);
+        }
+        
+        /* Game Screen */
+        .game-container {
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            gap: 20px;
+            height: 80vh;
+        }
+        
+        /* Top Panel - Players */
+        .players-panel {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 15px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 20px;
+            border-radius: 10px;
+        }
+        .player-info {
+            text-align: center;
+            padding: 15px;
+            background: rgba(255, 215, 0, 0.2);
+            border-radius: 10px;
+            min-width: 150px;
+            border: 2px solid #ffd700;
+            transition: all 0.3s;
+        }
+        .player-info.active {
+            border-color: #00ff00;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+        }
+        .player-info.dead {
+            opacity: 0.4;
+            border-color: #666;
+        }
+        .player-info .name {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .player-info .cards {
+            font-size: 24px;
+            color: #ffd700;
+        }
+        
+        /* Center - Table */
+        .table-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 15px;
+            border: 3px solid #ffd700;
+            padding: 30px;
+            position: relative;
+        }
+        .pile-display {
+            font-size: 48px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .claim-display {
+            background: rgba(255, 215, 0, 0.3);
+            padding: 20px 40px;
+            border-radius: 10px;
+            font-size: 24px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .liar-btn {
+            padding: 20px 60px;
+            background: #ff0000;
+            color: #fff;
+            border: 3px solid #fff;
+            border-radius: 10px;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+        .liar-btn:hover {
+            background: #cc0000;
+            transform: scale(1.1);
+            box-shadow: 0 0 30px rgba(255, 0, 0, 0.8);
+        }
+        .liar-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        
+        /* Bottom - My Cards */
+        .my-cards-panel {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid #ffd700;
+        }
+        .my-cards {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        .card {
+            width: 100px;
+            height: 140px;
+            background: linear-gradient(135deg, #fff 0%, #f0f0f0 100%);
+            border: 3px solid #333;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+        }
+        .card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 10px 30px rgba(255, 215, 0, 0.5);
+        }
+        .card.selected {
+            border-color: #00ff00;
+            background: linear-gradient(135deg, #90EE90 0%, #98FB98 100%);
+            transform: translateY(-15px);
+        }
+        .card.Q { color: #e74c3c; }
+        .card.K { color: #3498db; }
+        .card.A { color: #2ecc71; }
+        .card.JOKER {
+            color: #9b59b6;
+            font-size: 24px;
+            background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+        }
+        
+        .play-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+        }
+        .card-select {
+            padding: 15px 30px;
+            background: rgba(255, 215, 0, 0.2);
+            border: 2px solid #ffd700;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+        }
+        .play-btn {
+            padding: 15px 40px;
+            background: #00ff00;
+            color: #000;
+            border: none;
+            border-radius: 10px;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .play-btn:hover {
+            background: #00cc00;
+            transform: scale(1.05);
+        }
+        .play-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        
+        /* Roulette Screen */
+        .roulette-container {
+            text-align: center;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 60px;
+            border-radius: 15px;
+            border: 3px solid #ff0000;
+        }
+        .roulette-victim {
+            font-size: 36px;
+            margin: 30px 0;
+            color: #ff0000;
+        }
+        .gun-display {
+            font-size: 120px;
+            margin: 40px 0;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        .trigger-btn {
+            padding: 30px 80px;
+            background: #ff0000;
+            color: #fff;
+            border: 5px solid #fff;
+            border-radius: 15px;
+            font-size: 32px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .trigger-btn:hover {
+            background: #cc0000;
+            transform: scale(1.1);
+            box-shadow: 0 0 40px rgba(255, 0, 0, 1);
+        }
+        .chamber-counter {
+            font-size: 64px;
+            color: #ff0000;
+            font-weight: bold;
+            margin: 30px 0;
+            text-shadow: 0 0 20px rgba(255, 0, 0, 0.8);
+        }
+        
+        /* Blood Splatter Effect */
+        .blood-splatter {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 99999;
+            display: none;
+        }
+        .blood-splatter.active {
+            display: block;
+            animation: bloodSplash 1.2s ease-out forwards;
+        }
+        @keyframes bloodSplash {
+            0% {
+                background: rgba(139, 0, 0, 0);
+            }
+            10% {
+                background: rgba(139, 0, 0, 0.95);
+            }
+            40% {
+                background: rgba(139, 0, 0, 0.85);
+            }
+            70% {
+                background: rgba(139, 0, 0, 0.6);
+            }
+            100% {
+                background: rgba(139, 0, 0, 0);
+            }
+        }
+        
+        /* Game Over */
+        .game-over-container {
+            text-align: center;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 60px;
+            border-radius: 15px;
+            border: 3px solid #ffd700;
+        }
+        .winner-display {
+            font-size: 48px;
+            color: #ffd700;
+            margin: 30px 0;
+            text-shadow: 0 0 30px rgba(255, 215, 0, 0.8);
+        }
+        
+        .info-box {
+            background: rgba(255, 215, 0, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            font-size: 18px;
+            text-align: center;
+        }
+        
+        .spectator-banner {
+            background: rgba(255, 0, 0, 0.3);
+            padding: 15px;
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border: 2px solid #ff0000;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <h1>Liar's Bar</h1>
+        
+        <!-- Join Screen -->
+        <div id="joinScreen" class="screen active">
+            <div class="join-form">
+                <h2 style="text-align:center; margin-bottom:20px; color:#ffd700;">Oyuna Katıl</h2>
+                <input type="text" id="nameInput" placeholder="İsminiz" maxlength="24">
+                <input type="text" id="roomInput" placeholder="Oda Kodu" maxlength="20">
+                <button onclick="createRoom()">🆕 Yeni Oda Aç</button>
+                <button onclick="joinRoom()">🚪 Odaya Katıl</button>
+            </div>
+        </div>
+        
+        <!-- Lobby Screen -->
+        <div id="lobbyScreen" class="screen">
+            <div class="lobby-container">
+                <h2 style="text-align:center; color:#ffd700; margin-bottom:20px;">Oda: <span id="roomCode"></span></h2>
+                <div class="info-box">
+                    2-6 oyuncu • Her oyuncuya 8 kart • Q, K, A, Joker
+                </div>
+                <div class="players-grid" id="playersGrid"></div>
+                <button class="start-btn" onclick="startGame()">OYUNU BAŞLAT</button>
+            </div>
+        </div>
+        
+        <!-- Game Screen -->
+        <div id="gameScreen" class="screen">
+            <div id="spectatorBanner" class="spectator-banner" style="display:none;">
+                👻 İZLEYİCİ MODU - Öldünüz ama oyunu izlemeye devam edebilirsiniz
+            </div>
+            
+            <div class="game-container">
+                <!-- Top: Players -->
+                <div class="players-panel" id="playersPanel"></div>
+                
+                <!-- Center: Table -->
+                <div class="table-area">
+                    <div id="turnInfo" class="info-box">Oyun başlıyor...</div>
+                    
+                    <div class="pile-display">
+                        🃏 <span id="pileCount">0</span> kart
+                    </div>
+                    
+                    <div id="claimDisplay" class="claim-display" style="display:none;"></div>
+                    
+                    <div class="action-buttons">
+                        <button class="liar-btn" id="liarBtn" onclick="callLiar()" disabled>YALAN!</button>
+                    </div>
+                </div>
+                
+                <!-- Bottom: My Cards -->
+                <div class="my-cards-panel">
+                    <div id="roundCardDisplay" style="text-align:center; font-size:32px; margin-bottom:20px; color:#ffd700;">
+                        Bu turda atılacak kart: <span id="roundCard">-</span>
+                    </div>
+                    <div class="my-cards" id="myCards"></div>
+                    <div class="play-controls">
+                        <button class="play-btn" id="playBtn" onclick="playCards()" disabled>AT</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Roulette Screen -->
+        <div id="rouletteScreen" class="screen">
+            <div class="roulette-container">
+                <h2 style="font-size:48px; color:#ff0000;">🎲 RUS RULETİ 🔫</h2>
+                <div class="roulette-victim" id="rouletteVictim"></div>
+                <div class="chamber-counter" id="chamberCounter"><span id="totalShots" style="font-weight:bold;">0</span>/6</div>
+                <button class="trigger-btn" id="triggerBtn" onclick="pullTrigger()">TETİĞİ ÇEK</button>
+            </div>
+        </div>
+        
+        <!-- Game Over Screen -->
+        <div id="gameOverScreen" class="screen">
+            <div class="game-over-container">
+                <h2 style="font-size:60px; color:#ffd700;">🏆 OYUN BİTTİ 🏆</h2>
+                <div class="winner-display" id="winnerDisplay"></div>
+                <button class="start-btn" style="max-width:400px; margin:30px auto;" onclick="location.reload()">YENİ OYUN</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Blood Splatter Overlay -->
+    <div class="blood-splatter" id="bloodSplatter"></div>
+    
+    <script>
+        let ws = null;
+        let pid = null;
+        let roomId = null;
+        let myCards = [];
+        let selectedCards = [];
+        let isMyTurn = false;
+        let amIAlive = true;
+        
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+        }
+        
+        function createRoom() {
+            const name = document.getElementById('nameInput').value.trim();
+            const room = document.getElementById('roomInput').value.trim() || 'room' + Math.random().toString(36).substr(2, 6);
+            if (!name) { alert('İsim gerekli!'); return; }
+            connectWS(room, name, 'create');
+        }
+        
+        function joinRoom() {
+            const name = document.getElementById('nameInput').value.trim();
+            const room = document.getElementById('roomInput').value.trim();
+            if (!name || !room) { alert('İsim ve oda kodu gerekli!'); return; }
+            connectWS(room, name, 'join');
+        }
+        
+        function connectWS(room, name, mode) {
+            roomId = room;
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const host = window.location.hostname || 'localhost';
+            const port = window.location.port || '8000';
+            ws = new WebSocket(`${protocol}//${host}:${port}/ws/liars`);
+            
+            ws.onopen = () => {
+                ws.send(JSON.stringify({ type: 'join', roomId: room, name: name, mode: mode }));
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleMessage(data);
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                alert('Bağlantı hatası!');
+            };
+        }
+        
+        function handleMessage(data) {
+            console.log('Mesaj:', data);
+            
+            if (data.type === 'joined') {
+                pid = data.pid;
+                document.getElementById('roomCode').textContent = roomId;
+                showScreen('lobbyScreen');
+            }
+            
+            else if (data.type === 'lobby_update') {
+                const grid = document.getElementById('playersGrid');
+                grid.innerHTML = '';
+                for (let [id, info] of Object.entries(data.players)) {
+                    const div = document.createElement('div');
+                    div.className = 'player-card';
+                    div.textContent = info.name;
+                    grid.appendChild(div);
+                }
+            }
+            
+            else if (data.type === 'state') {
+                myCards = data.my_cards;
+                amIAlive = data.my_alive;
+                isMyTurn = data.turn === pid && amIAlive;
+                
+                // Spectator banner
+                document.getElementById('spectatorBanner').style.display = amIAlive ? 'none' : 'block';
+                
+                // Round card göster
+                if (data.round_card) {
+                    document.getElementById('roundCard').textContent = getCardName(data.round_card);
+                }
+                
+                showScreen('gameScreen');
+                updatePlayersPanel(data.players, data.turn);
+                updateMyCards();
+                updateTable(data);
+            }
+            
+            else if (data.type === 'play_made') {
+                document.getElementById('claimDisplay').style.display = 'block';
+                document.getElementById('claimDisplay').textContent = 
+                    `${data.player_name}: ${data.claim.count} adet ${getCardName(data.claim.card)}`;
+                document.getElementById('pileCount').textContent = data.claim.count;
+                document.getElementById('liarBtn').disabled = !amIAlive;
+            }
+            
+            else if (data.type === 'liar_called') {
+                const cardsStr = data.cards_revealed.map(c => getCardName(c)).join(', ');
+                const msg = data.valid ? 
+                    `${data.caller_name} YANILDI! Kartlar: ${cardsStr}` :
+                    `${data.caller_name} DOĞRU! Yalancı yakalandı! Kartlar: ${cardsStr}`;
+                alert(msg);
+            }
+            
+            else if (data.type === 'roulette_start') {
+                showScreen('rouletteScreen');
+                document.getElementById('rouletteVictim').textContent = 
+                    `${data.victim_name} tetiği çekmeli!`;
+                document.getElementById('triggerBtn').disabled = data.victim !== pid;
+                
+                // Sayaç shots_used'a göre ayarla
+                const currentShots = data.shots_used || 0;
+                document.getElementById('chamberCounter').innerHTML = `<span id="totalShots" style="font-weight:bold;">${currentShots}</span>/6`;
+            }
+            
+            else if (data.type === 'roulette_result') {
+                console.log('Roulette result:', data);
+                
+                // Sayaç güncelle
+                const currentShots = data.shots_used || 0;
+                const remaining = 6;
+                const currentInRound = ((currentShots - 1) % remaining) + 1;
+                document.getElementById('chamberCounter').innerHTML = `<span id="totalShots" style="font-weight:bold;">${currentShots}</span>/6`;
+                
+                // Rulet ekranını tut, sayaç görünsün
+                if (data.shot === true) {
+                    console.log('SHOT! Triggering blood effect');
+                    
+                    // Kan efekti göster
+                    const bloodSplatter = document.getElementById('bloodSplatter');
+                    if (bloodSplatter) {
+                        console.log('Blood splatter element found');
+                        bloodSplatter.classList.add('active');
+                        
+                        setTimeout(() => {
+                            bloodSplatter.classList.remove('active');
+                        }, 1200);
+                    } else {
+                        console.error('Blood splatter element NOT found!');
+                    }
+                    
+                    setTimeout(() => {
+                        alert('💀 BANG! ' + (data.victim === pid ? 'Öldünüz!' : 'Oyuncu öldü!'));
+                    }, 800);
+                } else {
+                    console.log('NOT shot, player survived');
+                    setTimeout(() => {
+                        alert('🍀 Kurtuldu! Klik...');
+                        // Sayaç görünür kalacak
+                    }, 500);
+                }
+            }
+            
+            else if (data.type === 'game_over') {
+                showScreen('gameOverScreen');
+                document.getElementById('winnerDisplay').textContent = 
+                    `🎉 ${data.winner_name} KAZANDI! 🎉`;
+            }
+            
+            else if (data.type === 'info') {
+                alert(data.msg);
+            }
+            
+            else if (data.type === 'join_error') {
+                alert(data.msg || 'Odaya katılma hatası!');
+                if (ws) {
+                    ws.close();
+                    ws = null;
+                }
+                showScreen('joinScreen');
+            }
+        }
+        
+        function updatePlayersPanel(players, currentTurn) {
+            const panel = document.getElementById('playersPanel');
+            panel.innerHTML = '';
+            
+            for (let [id, info] of Object.entries(players)) {
+                const div = document.createElement('div');
+                div.className = 'player-info';
+                if (id === currentTurn) div.classList.add('active');
+                if (!info.alive) div.classList.add('dead');
+                
+                const shotsInfo = info.shots_used > 0 ? `<div style="color:#ff6b6b;">🔫 ${info.shots_used}</div>` : '';
+                
+                div.innerHTML = `
+                    <div class="name">${info.name}</div>
+                    <div class="cards">🃏 ${info.card_count}</div>
+                    ${shotsInfo}
+                    ${!info.alive ? '<div>💀</div>' : ''}
+                `;
+                panel.appendChild(div);
+            }
+        }
+        
+        function updateMyCards() {
+            const container = document.getElementById('myCards');
+            container.innerHTML = '';
+            
+            if (!amIAlive) {
+                container.innerHTML = '<div style="color:#ff0000; font-size:24px;">💀 Öldünüz - Oyunu izleyebilirsiniz</div>';
+                return;
+            }
+            
+            myCards.forEach((card, idx) => {
+                const div = document.createElement('div');
+                div.className = `card ${card}`;
+                div.textContent = getCardSymbol(card);
+                div.onclick = () => toggleCard(idx);
+                if (selectedCards.includes(idx)) div.classList.add('selected');
+                container.appendChild(div);
+            });
+        }
+        
+        function toggleCard(idx) {
+            if (!isMyTurn || !amIAlive) return;
+            
+            const pos = selectedCards.indexOf(idx);
+            if (pos > -1) {
+                selectedCards.splice(pos, 1);
+            } else {
+                if (selectedCards.length < 4) {
+                    selectedCards.push(idx);
+                }
+            }
+            updateMyCards();
+            document.getElementById('playBtn').disabled = selectedCards.length === 0;
+        }
+        
+        function updateTable(data) {
+            document.getElementById('pileCount').textContent = data.pile_count;
+            
+            if (isMyTurn) {
+                document.getElementById('turnInfo').textContent = '🎯 SİZİN TURUNUZ - Kart seçin ve atın!';
+                document.getElementById('turnInfo').style.background = 'rgba(0, 255, 0, 0.3)';
+                document.getElementById('playBtn').disabled = selectedCards.length === 0;
+            } else {
+                document.getElementById('turnInfo').textContent = '⏳ Sıra diğer oyuncuda...';
+                document.getElementById('turnInfo').style.background = 'rgba(255, 215, 0, 0.2)';
+                document.getElementById('playBtn').disabled = true;
+            }
+            
+            if (data.current_claim) {
+                document.getElementById('claimDisplay').style.display = 'block';
+                document.getElementById('claimDisplay').textContent = 
+                    `Son İddia: ${data.current_claim.count} adet ${getCardName(data.current_claim.card)}`;
+                // Sadece sıradaki oyuncu yalan basabilir
+                document.getElementById('liarBtn').disabled = !isMyTurn || !amIAlive;
+            } else {
+                document.getElementById('claimDisplay').style.display = 'none';
+                document.getElementById('liarBtn').disabled = true;
+            }
+        }
+        
+        function startGame() {
+            ws.send(JSON.stringify({ type: 'start_game' }));
+        }
+        
+        function playCards() {
+            if (selectedCards.length === 0) return;
+            
+            ws.send(JSON.stringify({
+                type: 'play_cards',
+                card_indices: selectedCards
+            }));
+            
+            selectedCards = [];
+        }
+        
+        function callLiar() {
+            if (!isMyTurn) {
+                alert('⚠️ Sıra sende değil! Sadece sırası gelen oyuncu yalan diyebilir.');
+                return;
+            }
+            if (!amIAlive) {
+                alert('⚠️ Öldün! Artık oynayamazsın.');
+                return;
+            }
+            if (confirm('Yalancı olduğundan emin misin?')) {
+                ws.send(JSON.stringify({ type: 'call_liar' }));
+            }
+        }
+        
+        function pullTrigger() {
+            ws.send(JSON.stringify({ type: 'pull_trigger' }));
+            document.getElementById('triggerBtn').disabled = true;
+        }
+        
+        function getCardName(card) {
+            const names = {
+                'Q': '♥️ Kraliçe',
+                'K': '♠️ Kral',
+                'A': '♣️ As',
+                'JOKER': '🃏 Joker'
+            };
+            return names[card] || card;
+        }
+        
+        function getCardSymbol(card) {
+            const symbols = {
+                'Q': 'Q',
+                'K': 'K',
+                'A': 'A',
+                'JOKER': '🃏'
+            };
+            return symbols[card] || card;
+        }
+    </script>
+</body>
+</html>
