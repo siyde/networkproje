@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>Spyfall</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    :root {
+      --bg1: #050816;
+      --bg2: #0b1020;
+      --accent: #0ff0fc;
+      --accent-soft: rgba(15, 240, 252, 0.15);
+      --accent2: #ff007a;
+      --danger: #ff355e;
+      --card-bg: rgba(10, 12, 24, 0.85);
+      --border-soft: rgba(255, 255, 255, 0.08);
+      --text-main: #f8f9ff;
+      --text-soft: #a0a4c0;
+      --shadow-soft: 0 20px 40px rgba(0, 0, 0, 0.7);
+      --radius-lg: 18px;
+      --radius-md: 12px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #1f2933 0, #050816 40%, #000000 100%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+      overflow: hidden;
+    }
+
+    /* arka plan glow */
+    body::before,
+    body::after {
+      content: "";
+      position: fixed;
+      width: 420px;
+      height: 420px;
+      border-radius: 50%;
+      filter: blur(100px);
+      opacity: 0.5;
+      z-index: -2;
+    }
+
+    body::before {
+      background: #0ff0fc;
+      top: -80px;
+      left: -80px;
+    }
+
+    body::after {
+      background: #ff007a;
+      bottom: -120px;
+      right: -40px;
+    }
+
+    #app {
+      width: 100%;
+      max-width: 1200px;
+      height: 100%;
+      max-height: 720px;
+      background: radial-gradient(circle at top left, rgba(15, 240, 252, 0.08), transparent 55%),
+                  radial-gradient(circle at bottom right, rgba(255, 0, 122, 0.08), transparent 55%),
+                  rgba(3, 6, 20, 0.92);
+      border-radius: 26px;
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: var(--shadow-soft);
+      display: flex;
+      flex-direction: column;
+      padding: 20px 20px 16px;
+      backdrop-filter: blur(18px);
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 6px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      margin-bottom: 14px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .logo-main {
+      font-size: 30px;
+      letter-spacing: 1px;
+      font-weight: 800;
+      text-transform: uppercase;
+      background: linear-gradient(90deg, #0ff0fc, #ff00c3);
+      -webkit-background-clip: text;
+      color: transparent;
+      text-shadow: 0 0 18px rgba(15,240,252,0.5);
+    }
+
+    .logo-sub {
+      font-size: 13px;
+      color: var(--text-soft);
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+    }
+
+    .header-pill {
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.16);
+      font-size: 12px;
+      color: var(--text-soft);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: linear-gradient(135deg, rgba(15,240,252,0.05), rgba(255,0,122,0.08));
+    }
+
+    .header-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #00ff88;
+      box-shadow: 0 0 10px rgba(0,255,136,0.8);
+    }
+
+    .screen {
+      display: none;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .screen.active {
+      display: flex;
+    }
+
+    /* JOIN SCREEN */
+
+    #joinScreen {
+      align-items: center;
+      justify-content: center;
+    }
+
+    .join-card {
+      width: min(540px, 100%);
+      background: var(--card-bg);
+      border-radius: var(--radius-lg);
+      padding: 26px 26px 24px;
+      box-shadow: var(--shadow-soft);
+      border: 1px solid rgba(255,255,255,0.08);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .join-card::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background:
+        radial-gradient(circle at 0 0, rgba(15,240,252,0.12), transparent 50%),
+        radial-gradient(circle at 100% 100%, rgba(255,0,122,0.16), transparent 55%);
+      opacity: 0.9;
+      z-index: -1;
+    }
+
+    .join-title {
+      font-size: 20px;
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+
+    .join-sub {
+      font-size: 13px;
+      color: var(--text-soft);
+      margin-bottom: 18px;
+    }
+
+    .input-row {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    label {
+      font-size: 13px;
+      color: var(--text-soft);
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border-soft);
+      background: rgba(7, 10, 24, 0.95);
+      color: var(--text-main);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.08s ease;
+    }
+
+    input[type="text"]::placeholder {
+      color: #60637e;
+    }
+
+    input[type="text"]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(15,240,252,0.35);
+      transform: translateY(-1px);
+    }
+
+    .join-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 6px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 11px 14px;
+      border-radius: 999px;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.2s ease;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #0ff0fc, #00b3ff);
+      color: #020617;
+      box-shadow: 0 0 20px rgba(15,240,252,0.4);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 0 24px rgba(15,240,252,0.7);
+    }
+
+    .btn-secondary {
+      background: linear-gradient(135deg, rgba(15,240,252,0.12), rgba(255,0,122,0.26));
+      color: var(--text-main);
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+
+    .btn-secondary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 0 18px rgba(255,0,122,0.5);
+    }
+
+    .join-footer {
+      margin-top: 14px;
+      font-size: 11px;
+      color: var(--text-soft);
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .tag-pill {
+      border-radius: 999px;
+      padding: 3px 8px;
+      background: rgba(15,240,252,0.08);
+      border: 1px solid rgba(15,240,252,0.35);
+      color: var(--accent);
+      font-size: 11px;
+    }
+
+    /* LOBBY */
+
+    #lobbyScreen {
+      gap: 18px;
+      padding-inline: 6px;
+    }
+
+    .lobby-left, .lobby-right {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: var(--radius-md);
+      padding: 16px 16px 14px;
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 10px 24px rgba(0,0,0,0.6);
+      min-height: 0;
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .card-sub {
+      font-size: 12px;
+      color: var(--text-soft);
+      margin-bottom: 10px;
+    }
+
+    #lobbyPlayers {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      margin-top: 6px;
+    }
+
+    .player-chip {
+      border-radius: 12px;
+      background: rgba(13, 17, 32, 0.96);
+      border: 1px solid rgba(148,163,184,0.28);
+      padding: 10px 11px 8px;
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .player-name {
+      font-weight: 600;
+    }
+
+    .player-me {
+      color: var(--accent);
+      font-size: 11px;
+    }
+
+    .player-host {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: #fbbf24;
+    }
+
+    .btn-wide {
+      width: 100%;
+    }
+
+    .hint {
+      font-size: 11px;
+      color: var(--text-soft);
+      margin-top: 6px;
+    }
+
+    /* GAME SCREEN */
+
+    #gameScreen {
+      gap: 14px;
+      padding-inline: 6px;
+    }
+
+    .game-main {
+      flex: 2;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .game-side {
+      flex: 1.6;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .role-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: var(--text-soft);
+      margin-bottom: 4px;
+    }
+
+    .role-value {
+      font-size: 19px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .role-value.spy {
+      color: var(--accent2);
+      text-shadow: 0 0 16px rgba(255,0,122,0.9);
+    }
+
+    .role-value.civilian {
+      color: #4ade80;
+      text-shadow: 0 0 16px rgba(74,222,128,0.5);
+    }
+
+    .location-text {
+      font-size: 14px;
+      margin-bottom: 2px;
+    }
+
+    .role-extra {
+      font-size: 13px;
+      color: var(--text-soft);
+    }
+
+    .turn-indicator {
+      margin-top: 10px;
+      padding: 8px 10px;
+      border-radius: 11px;
+      background: rgba(15,240,252,0.10);
+      border: 1px solid rgba(15,240,252,0.3);
+      font-size: 12px;
+    }
+
+    .turn-indicator.self {
+      background: rgba(74,222,128,0.16);
+      border-color: rgba(74,222,128,0.6);
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+
+    .btn-ghost {
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 12px;
+      border: 1px solid rgba(148,163,184,0.4);
+      background: rgba(15,23,42,0.7);
+      color: var(--text-main);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .btn-ghost.danger {
+      border-color: rgba(248,113,113,0.8);
+      color: #fecaca;
+    }
+
+    .btn-ghost:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    .player-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 9px;
+      margin-top: 6px;
+    }
+
+    .player-card {
+      border-radius: 11px;
+      padding: 9px 10px 8px;
+      background: rgba(12,16,32,0.95);
+      border: 1px solid rgba(148,163,184,0.35);
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .player-card.dead {
+      opacity: 0.4;
+      border-style: dashed;
+    }
+
+    .player-card.turn {
+      border-color: var(--accent);
+      box-shadow: 0 0 14px rgba(15,240,252,0.55);
+    }
+
+    .player-status {
+      font-size: 11px;
+      color: var(--text-soft);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* Chat */
+
+    #chatLog {
+      height: 180px;
+      overflow-y: auto;
+      background: radial-gradient(circle at top left, rgba(15,240,252,0.12), transparent 60%),
+                  radial-gradient(circle at bottom right, rgba(255,0,122,0.15), transparent 60%),
+                  #020617;
+      border-radius: 10px;
+      padding: 8px 9px;
+      border: 1px solid rgba(148,163,184,0.4);
+      font-size: 13px;
+    }
+
+    .chat-msg {
+      margin-bottom: 5px;
+    }
+
+    .chat-name {
+      color: var(--accent);
+      font-weight: 600;
+      margin-right: 4px;
+    }
+
+    .chat-input-row {
+      display: flex;
+      margin-top: 8px;
+      gap: 6px;
+    }
+
+    #chatInput {
+      flex: 1;
+      font-size: 13px;
+    }
+
+    .btn-chat {
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(148,163,184,0.6);
+      background: rgba(15,23,42,0.9);
+      color: var(--text-main);
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    /* Voting */
+
+    #votingScreen,
+    #guessScreen,
+    #gameOverScreen {
+      align-items: center;
+      justify-content: center;
+    }
+
+    .overlay-card {
+      width: min(520px, 100%);
+      background: var(--card-bg);
+      border-radius: var(--radius-lg);
+      padding: 24px 22px 20px;
+      border: 1px solid rgba(248,113,113,0.5);
+      box-shadow: var(--shadow-soft);
+      text-align: center;
+    }
+
+    .overlay-card h2 {
+      margin-bottom: 8px;
+      font-size: 20px;
+    }
+
+    .overlay-sub {
+      font-size: 13px;
+      color: var(--text-soft);
+      margin-bottom: 16px;
+    }
+
+    .vote-buttons,
+    .guess-buttons {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 10px;
+    }
+
+    .vote-btn {
+      padding: 10px 12px;
+      border-radius: 11px;
+      background: rgba(127,29,29,0.88);
+      border: 1px solid rgba(248,113,113,0.9);
+      color: #fee2e2;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .guess-btn {
+      padding: 10px 12px;
+      border-radius: 11px;
+      background: rgba(15,23,42,0.98);
+      border: 1px solid rgba(15,240,252,0.7);
+      color: var(--text-main);
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .guess-btn:hover {
+      box-shadow: 0 0 18px rgba(15,240,252,0.6);
+    }
+
+    .vote-btn:disabled,
+    .guess-btn:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
+    /* Game Over */
+
+    .go-title {
+      font-size: 26px;
+      margin-bottom: 10px;
+    }
+
+    .go-title.spy { color: var(--accent2); }
+    .go-title.civ { color: #4ade80; }
+
+    .go-detail {
+      font-size: 14px;
+      color: var(--text-soft);
+      margin-bottom: 16px;
+    }
+
+    .btn-outline {
+      padding: 9px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.6);
+      background: transparent;
+      color: var(--text-main);
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    @media (max-width: 900px) {
+      #app { max-height: none; height: auto; }
+      #lobbyScreen, #gameScreen {
+        flex-direction: column;
+      }
+      .lobby-left, .lobby-right,
+      .game-main, .game-side {
+        width: 100%;
+      }
+    }
+
+  </style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo">
+      <div class="logo-main">Spyfall</div>
+    </div>
+    <div class="header-pill">
+      <span class="header-dot"></span>
+      <span id="headerStatus">Bağlantı bekleniyor…</span>
+    </div>
+  </header>
+
+  <!-- JOIN SCREEN -->
+  <section id="joinScreen" class="screen active">
+    <div class="join-card">
+      <div class="join-title">Odaya bağlan</div>
+      <div class="join-sub">İstersen yeni bir oda aç, istersen arkadaşının odasına katıl.</div>
+
+      <div class="input-row">
+        <label for="nameInput">Takma adın</label>
+        <input type="text" id="nameInput" placeholder="" maxlength="24">
+      </div>
+
+      <div class="input-row">
+        <label for="roomInput">Oda kodu</label>
+        <input type="text" id="roomInput" placeholder="" maxlength="16">
+      </div>
+
+      <div class="join-actions">
+        <button class="btn btn-secondary" onclick="createRoom()">
+          🆕 Create Game
+        </button>
+        <button class="btn btn-primary" onclick="joinExisting()">
+          🚪 Joın Game
+        </button>
+      </div>
+
+      <div class="join-footer">
+        <div>Oda kodunu arkadaşlarınla paylaş, hepsi aynı kodla bağlansın.</div>
+        
+      </div>
+    </div>
+  </section>
+
+  <!-- LOBBY SCREEN -->
+  <section id="lobbyScreen" class="screen">
+    <div class="lobby-left">
+      <div class="card">
+        <div class="card-title">
+          <span>Lobby</span>
+          <span style="font-size:12px;color:var(--text-soft);">Oda kodu: <b id="lobbyRoom"></b></span>
+        </div>
+        <div class="card-sub">
+          Herkes bağlandığında host oyunu başlatabilir.
+        </div>
+        <div id="lobbyPlayers"></div>
+      </div>
+    </div>
+
+    <div class="lobby-right">
+      <div class="card">
+        <div class="card-title">
+          <span>Oyun kontrolü</span>
+        </div>
+        <button id="startBtn" class="btn btn-primary btn-wide" disabled onclick="startGame()">
+          🚀 Oyunu Başlat (Host)
+        </button>
+        <div class="hint">
+          Host isen buton aktif olur. En az 3 oyuncu gereklidir.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- GAME SCREEN -->
+  <section id="gameScreen" class="screen">
+    <div class="game-main">
+      <div class="card">
+        <div class="role-label">Rolün</div>
+        <div id="roleValue" class="role-value">-</div>
+        <div id="locationInfo" class="location-text"></div>
+        <div id="roleInfo" class="role-extra"></div>
+
+        <div id="turnBox" class="turn-indicator" style="margin-top:14px;">Sıra bilgisi yükleniyor…</div>
+
+        <div class="btn-group">
+          <button id="askBtn" class="btn-ghost" onclick="askQuestion()">
+            ➜ Sırayı geçir (soru sordum)
+          </button>
+          <button id="forceVoteBtn" class="btn-ghost danger" onclick="forceVote()" disabled>
+            ⚠ Early Voting (host)
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <span>Oyuncular</span>
+        </div>
+        <div id="playersGridGame" class="player-grid"></div>
+      </div>
+    </div>
+
+    <div class="game-side">
+      <div class="card">
+        <div class="card-title">
+          <span>Chat</span>
+        </div>
+        <div id="chatLog"></div>
+        <div class="chat-input-row">
+          <input id="chatInput" type="text" placeholder="Soru ya da cevap yaz..." maxlength="220">
+          <button class="btn-chat" onclick="sendChat()">Gönder</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VOTING SCREEN -->
+  <section id="votingScreen" class="screen">
+    <div class="overlay-card">
+      <h2>🗳 Oylama</h2>
+      <div class="overlay-sub">
+        Kimin spy olduğunu düşünüyorsan onu seç. Her oyuncu yalnızca bir oy kullanabilir.
+      </div>
+      <div id="voteButtons" class="vote-buttons"></div>
+    </div>
+  </section>
+
+  <!-- SPY GUESS SCREEN -->
+  <section id="guessScreen" class="screen">
+    <div class="overlay-card" style="border-color:rgba(15,240,252,0.6);">
+      <h2>🕵️ Spy Tahmini</h2>
+      <div class="overlay-sub">
+        Spy elendi. Şimdi gerçek mekânı tek hakla tahmin etmeli.
+      </div>
+      <div id="guessButtons" class="guess-buttons"></div>
+    </div>
+  </section>
+
+  <!-- GAME OVER SCREEN -->
+  <section id="gameOverScreen" class="screen">
+    <div class="overlay-card" style="border-color:rgba(148,163,184,0.6);">
+      <div id="goTitle" class="go-title">Oyun Bitti</div>
+      <div id="goDetail" class="go-detail"></div>
+      <button class="btn-outline" onclick="location.reload()">
+        🔁 Yeni oyun için sayfayı yenile
+      </button>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  let ws = null;
+  let pid = null;
+  let roomId = null;
+  let players = {};
+  let myInfo = null;
+  let currentTurn = null;
+  let isHost = false;
+
+  function setStatus(text) {
+    document.getElementById("headerStatus").textContent = text;
+  }
+
+  function showScreen(id) {
+    document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+    document.getElementById(id).classList.add("active");
+  }
+
+  function createRoom() {
+    const name = document.getElementById("nameInput").value.trim();
+    if (!name) { alert("İsim gerekli."); return; }
+    // rastgele oda kodu
+    const code = "R" + Math.random().toString(36).substring(2, 6).toUpperCase();
+    document.getElementById("roomInput").value = code;
+    connectToRoom(code, name);
+  }
+
+  function joinExisting() {
+    const name = document.getElementById("nameInput").value.trim();
+    const room = document.getElementById("roomInput").value.trim();
+    if (!name || !room) { alert("İsim ve oda kodu gerekli."); return; }
+    connectToRoom(room, name);
+  }
+
+  function connectToRoom(room, name) {
+    roomId = room;
+    const url = `ws://localhost:8000/ws/spyfall`;  // backend burada çalışıyor
+    ws = new WebSocket(url);
+
+    ws.onopen = () => {
+      setStatus("Bağlandı.");
+      ws.send(JSON.stringify({ type: "join", roomId: room, name }));
+    };
+
+    ws.onmessage = (ev) => {
+      const data = JSON.parse(ev.data);
+      handleMessage(data);
+    };
+
+    ws.onerror = () => setStatus("Bağlantı hatası.");
+    ws.onclose = () => setStatus("Bağlantı kapandı.");
+  }
+
+  function handleMessage(data) {
+    console.log("WS:", data);
+
+    if (data.type === "joined") {
+      pid = data.pid;
+      document.getElementById("lobbyRoom").textContent = roomId;
+      showScreen("lobbyScreen");
+      return;
+    }
+
+    if (data.type === "lobby_update") {
+      players = data.players || {};
+      isHost = (data.host === pid);
+
+      const cont = document.getElementById("lobbyPlayers");
+      cont.innerHTML = "";
+      Object.entries(players).forEach(([id, p]) => {
+        const div = document.createElement("div");
+        div.className = "player-chip";
+        div.innerHTML = `
+          <div class="player-name">${p.name}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span class="player-me">${id === pid ? "(sen)" : ""}</span>
+            ${p.is_host ? '<span class="player-host">👑 Host</span>' : ""}
+          </div>
+        `;
+        cont.appendChild(div);
+      });
+
+      document.getElementById("startBtn").disabled = !isHost;
+      return;
+    }
+
+    if (data.type === "state") {
+      players = data.players || {};
+      myInfo = data.me;
+      currentTurn = data.turn;
+      isHost = (data.host === pid);
+
+      if (data.phase === "playing" || data.phase === "voting" || data.phase === "spy_guess") {
+        showScreen("gameScreen");
+        updateGameUI();
+      }
+
+      return;
+    }
+
+    if (data.type === "chat_message") {
+      const log = document.getElementById("chatLog");
+      const div = document.createElement("div");
+      div.className = "chat-msg";
+      const senderName = players[data.from]?.name || "???";
+      div.innerHTML = `<span class="chat-name">${senderName}:</span> ${data.text}`;
+      log.appendChild(div);
+      log.scrollTop = log.scrollHeight;
+      return;
+    }
+
+    if (data.type === "voting_started") {
+      renderVoting();
+      showScreen("votingScreen");
+      return;
+    }
+
+    if (data.type === "voting_result") {
+      let msg;
+      if (data.result === "no_votes") {
+        msg = "Kimse oy vermedi, oylama başarısız.";
+      } else if (data.was_spy) {
+        msg = `${data.name} elendi ve spy çıktı!`;
+      } else {
+        msg = `${data.name} elendi ama spy değildi.`;
+      }
+      alert(msg);
+      return;
+    }
+
+    if (data.type === "spy_guess_start") {
+      renderGuess(data.locations || []);
+      showScreen("guessScreen");
+      return;
+    }
+
+    if (data.type === "game_over") {
+      const title = document.getElementById("goTitle");
+      const detail = document.getElementById("goDetail");
+      if (data.winner === "SPY") {
+        title.textContent = "Spy kazandı!";
+        title.className = "go-title spy";
+      } else {
+        title.textContent = "Siviller kazandı!";
+        title.className = "go-title civ";
+      }
+      detail.innerHTML = `Mekân: <b>${data.location || "???"}</b>`;
+      showScreen("gameOverScreen");
+      return;
+    }
+
+    if (data.type === "afk_warning") {
+      alert(`Uzun süredir hareketsizsin, atılmana ${data.seconds_left} sn kaldı.`);
+      return;
+    }
+
+    if (data.type === "player_kicked") {
+      alert(`${data.name} oyundan atıldı. Sebep: ${data.reason}`);
+      return;
+    }
+  }
+
+  function startGame() {
+    if (!ws) return;
+    ws.send(JSON.stringify({ type: "start_game" }));
+  }
+
+  function sendChat() {
+    if (!ws) return;
+    const inp = document.getElementById("chatInput");
+    const text = inp.value.trim();
+    if (!text) return;
+    ws.send(JSON.stringify({ type: "chat", text }));
+    inp.value = "";
+  }
+
+  function askQuestion() {
+    if (!ws) return;
+    ws.send(JSON.stringify({ type: "ask" }));
+  }
+
+  function forceVote() {
+    if (!ws || !isHost) return;
+    ws.send(JSON.stringify({ type: "force_vote" }));
+  }
+
+  function renderVoting() {
+    const area = document.getElementById("voteButtons");
+    area.innerHTML = "";
+    Object.entries(players).forEach(([id, p]) => {
+      if (!p.alive || id === pid) return;
+      const btn = document.createElement("button");
+      btn.className = "vote-btn";
+      btn.textContent = p.name;
+      btn.onclick = () => {
+        ws.send(JSON.stringify({ type: "vote", target: id }));
+        [...area.querySelectorAll("button")].forEach(b => b.disabled = true);
+      };
+      area.appendChild(btn);
+    });
+  }
+
+  function renderGuess(locations) {
+    const area = document.getElementById("guessButtons");
+    area.innerHTML = "";
+    locations.forEach(loc => {
+      const btn = document.createElement("button");
+      btn.className = "guess-btn";
+      btn.textContent = loc;
+      btn.onclick = () => {
+        ws.send(JSON.stringify({ type: "spy_guess", guess: loc }));
+        [...area.querySelectorAll("button")].forEach(b => b.disabled = true);
+      };
+      area.appendChild(btn);
+    });
+  }
+
+  function updateGameUI() {
+    if (!myInfo) return;
+
+    const roleVal = document.getElementById("roleValue");
+    const locationInfo = document.getElementById("locationInfo");
+    const roleInfo = document.getElementById("roleInfo");
+    const turnBox = document.getElementById("turnBox");
+    const forceBtn = document.getElementById("forceVoteBtn");
+
+    if (myInfo.role === "SPY") {
+      roleVal.textContent = "SPY";
+      roleVal.className = "role-value spy";
+      locationInfo.textContent = "Mekân: ??? (sadece diğerleri biliyor)";
+      roleInfo.textContent = "Kalabalığın arasına karış, ipucu topla.";
+    } else {
+      roleVal.textContent = "Sivil";
+      roleVal.className = "role-value civilian";
+      locationInfo.textContent = "Mekân: " + (myInfo.location || "???");
+      roleInfo.textContent = "Rolün: " + (myInfo.location_role || "-");
+    }
+
+    if (currentTurn && players[currentTurn]) {
+      if (currentTurn === myInfo.pid) {
+        turnBox.textContent = "Sıra sende! Chat'ten soru sorup sonra 'Sırayı geçir' butonuna bas.";
+        turnBox.className = "turn-indicator self";
+      } else {
+        turnBox.textContent = "Soru sırası: " + players[currentTurn].name;
+        turnBox.className = "turn-indicator";
+      }
+    } else {
+      turnBox.textContent = "Sıra ayarlanıyor…";
+    }
+
+    // oyuncu grid
+    const grid = document.getElementById("playersGridGame");
+    grid.innerHTML = "";
+    Object.entries(players).forEach(([id, p]) => {
+      const div = document.createElement("div");
+      div.className = "player-card";
+      if (!p.alive) div.classList.add("dead");
+      if (id === currentTurn) div.classList.add("turn");
+      div.innerHTML = `
+        <div class="player-name">${p.name}</div>
+        <div class="player-status">
+          <span>${id === pid ? "Sen" : ""}</span>
+          <span>${p.alive ? "🟢 canlı" : "💀 ölü"}</span>
+        </div>
+      `;
+      grid.appendChild(div);
+    });
+
+    forceBtn.disabled = !isHost;
+  }
+
+  // enter ile chat
+  document.addEventListener("keydown", e => {
+    if (e.key === "Enter" && document.activeElement === document.getElementById("chatInput")) {
+      sendChat();
+    }
+  });
+</script>
+</body>
+</html>
