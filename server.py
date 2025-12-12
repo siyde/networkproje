@@ -1,5 +1,5 @@
 # server.py — Game Hub WS Sunucusu (Pictionary + TTT + Codenames + PixelWar)
-import asyncio, json, secrets, random, re, os, math
+import asyncio, json, secrets, random, re, os, math, time
 from typing import Dict
 from datetime import datetime
 
@@ -15,19 +15,20 @@ app.add_middleware(CORSMMiddleware := CORSMiddleware,
                    allow_methods=["*"])
 
 # ====== Pictionary ======
-pictionary_rooms: Dict[str, dict] = {}
+pic_rooms: Dict[str, dict] = {}
 
 # ====== Codenames ======
-codenames_rooms: Dict[str, dict] = {}
+cn_rooms: Dict[str, dict] = {}
 
 # ====== Tic Tac Toe ======
 ttt_rooms: Dict[str, dict] = {}
 
 # ====== Pixelwar ======
-pixelwar_rooms: Dict[str, dict] = {}
+pixel_rooms: Dict[str, dict] = {}
 
 # ====== Sumo Bash (yuvarlak arena mini game) ======
 sumo_rooms: Dict[str, dict] = {}
+spyfall_rooms: Dict[str, dict] = {}
 
 # ==========================
 # Pictionary (çok odalı)
@@ -436,6 +437,515 @@ async def pictionary_ws(ws: WebSocket):
                         "msg": "Çizen çıktı, tur yeniden başlatılıyor."
                     })
                     room["round_task"] = asyncio.create_task(pic_start_round(room_id))
+
+# ======================================================
+# SPYFALL ODA DEPOLARI
+# ======================================================
+
+spyfall_rooms: Dict[str, dict] = {}
+
+
+def spyfall_new_room():
+    return {
+        "players": {},          # pid -> {name, ws, alive, role, location_role, last_active}
+        "host": None,
+        "phase": "lobby",       # lobby / playing / voting / spy_guess / game_over
+        "spy": None,
+        "location": None,
+        "turn": None,
+        "turn_order": [],
+        "votes": {},            # pid -> voted_pid
+        "vote_target": None,
+        "vote_timer": None,
+        "round_started": None,
+        "afk_task": None
+    }
+
+
+# ======================================================
+# MEKAN VE ROL HAVUZU
+# ======================================================
+
+SPYFALL_LOCATIONS = {
+    "Restoran": ["Garson", "Şef", "Kasiyer", "Bulaşıkçı", "Müşteri", "Müdür"],
+    "Havaalanı": ["Pilot", "Hostes", "Güvenlik", "Bagaj Görevlisi", "Bilet Kontrol", "Yolcu"],
+    "Hastane": ["Doktor", "Hemşire", "Hasta", "Radyolog", "Acil Görevlisi", "Cerrah"],
+    "Banka": ["Bankacı", "Güvenlik", "Müşteri", "Müdür", "Kasiyer", "Kredi Uzmanı"],
+    "Okul": ["Öğretmen", "Öğrenci", "Müdür Yardımcısı", "Kantinci", "Güvenlik", "Rehber Öğretmen"],
+    "Sinema": ["Biletçi", "Projeksiyoncu", "Seyirci", "Temizlikçi", "Yönetici", "Mısır Satıcısı"],
+    "Polis Merkezi": ["Polis", "Komiser", "Suçlu", "Avukat", "Sekreter", "Dedektif"]
+}
+
+
+# ======================================================
+# HELPER FONKSIYONLAR
+# ======================================================
+
+def spyfall_get_alive(room):
+    return [p for p, info in room["players"].items() if info.get("alive", True)]
+
+
+async def spyfall_broadcast(room, payload):
+    msg = json.dumps(payload)
+    dead = []
+
+    for pid, pl in list(room["players"].items()):
+        try:
+            await pl["ws"].send_text(msg)
+        except:
+            dead.append(pid)
+
+    for pid in dead:
+        room["players"].pop(pid, None)
+
+
+async def spyfall_push_state(room):
+    """Her oyuncuya rolünü ve state'i yollar."""
+    for pid, pl in room["players"].items():
+        my_role = pl.get("role")
+        my_location = None if my_role == "SPY" else room["location"]
+        my_location_role = pl.get("location_role")
+
+        players_public = {
+            p: {
+                "name": room["players"][p]["name"],
+                "alive": room["players"][p]["alive"]
+            } for p in room["players"]
+        }
+
+        payload = {
+            "type": "state",
+            "phase": room["phase"],
+            "host": room["host"],
+            "players": players_public,
+            "turn": room["turn"],
+            "me": {
+                "pid": pid,
+                "name": pl["name"],
+                "role": my_role,
+                "location": my_location,
+                "location_role": my_location_role,
+                "alive": pl["alive"]
+            },
+            "location_revealed": room["phase"] == "game_over"
+        }
+
+        try:
+            await pl["ws"].send_text(json.dumps(payload))
+        except:
+            pass
+
+
+def spyfall_next_turn(room):
+    alive = spyfall_get_alive(room)
+    if len(alive) <= 1:
+        return
+
+    order = room["turn_order"]
+    if room["turn"] not in order:
+        room["turn"] = order[0]
+        return
+
+    idx = order.index(room["turn"])
+    for i in range(1, len(order) + 1):
+        nxt = order[(idx + i) % len(order)]
+        if nxt in alive:
+            room["turn"] = nxt
+            return
+
+
+# ======================================================
+# OYUN BASLATMA
+# ======================================================
+
+def spyfall_start_game(room):
+    alive_pids = list(room["players"].keys())
+    if len(alive_pids) < 3:
+        return False
+
+    room["phase"] = "playing"
+
+    # Mekan seç
+    location = random.choice(list(SPYFALL_LOCATIONS.keys()))
+    room["location"] = location
+
+    # Spy
+    spy_pid = random.choice(alive_pids)
+    room["spy"] = spy_pid
+
+    # Roller dağıt
+    roles = SPYFALL_LOCATIONS[location][:]  # copy
+    random.shuffle(roles)
+
+    for pid in alive_pids:
+        if pid == spy_pid:
+            room["players"][pid]["role"] = "SPY"
+            room["players"][pid]["location_role"] = None
+        else:
+            room["players"][pid]["role"] = "CIVILIAN"
+            room["players"][pid]["location_role"] = roles.pop() if roles else None
+
+    # Turn sırası
+    random.shuffle(alive_pids)
+    room["turn_order"] = alive_pids
+    room["turn"] = alive_pids[0]
+    room["round_started"] = time.time()
+
+    return True
+
+
+# ======================================================
+# VOTING
+# ======================================================
+
+async def spyfall_start_voting(room):
+    room["phase"] = "voting"
+    room["votes"] = {}
+    room["vote_target"] = None
+
+    await spyfall_broadcast(room, {
+        "type": "voting_started",
+        "duration": 40
+    })
+
+
+async def spyfall_finish_voting(room):
+    if room["phase"] != "voting":
+        return
+
+    votes = {}
+    for voter, target in room["votes"].items():
+        votes[target] = votes.get(target, 0) + 1
+
+    if not votes:
+        await spyfall_broadcast(room, {"type": "voting_result", "result": "no_votes"})
+        room["phase"] = "playing"
+        return
+
+    kicked = max(votes, key=votes.get)
+    room["players"][kicked]["alive"] = False
+
+    await spyfall_broadcast(room, {
+        "type": "voting_result",
+        "kicked": kicked,
+        "name": room["players"][kicked]["name"],
+        "was_spy": (kicked == room["spy"])
+    })
+
+    # Spy öldüyse → spy guess hakkı
+    if kicked == room["spy"]:
+        room["phase"] = "spy_guess"
+        await spyfall_broadcast(room, {
+            "type": "spy_guess_start",
+            "locations": list(SPYFALL_LOCATIONS.keys())
+        })
+        return
+
+    # Sivil öldüyse → oyuna devam
+    room["phase"] = "playing"
+
+
+# ======================================================
+# SPY GUESS
+# ======================================================
+
+async def spyfall_process_guess(room, pid, guess):
+    if pid != room["spy"]:
+        return
+
+    if guess == room["location"]:
+        await spyfall_broadcast(room, {
+            "type": "game_over",
+            "winner": "SPY",
+            "correct": True,
+            "location": room["location"]
+        })
+    else:
+        await spyfall_broadcast(room, {
+            "type": "game_over",
+            "winner": "CIVILIANS",
+            "correct": False,
+            "location": room["location"]
+        })
+
+    room["phase"] = "game_over"
+
+
+# ======================================================
+# AFK SISTEMI
+# ======================================================
+
+async def spyfall_kill_afk_player(room_id, pid):
+    room = spyfall_rooms.get(room_id)
+    if not room or pid not in room["players"]:
+        return
+
+    pl = room["players"][pid]
+    name = pl["name"]
+
+    # Lobby'de AFK → direkt at
+    if room["phase"] == "lobby":
+        room["players"].pop(pid)
+        if room["host"] == pid:
+            keys = list(room["players"].keys())
+            room["host"] = keys[0] if keys else None
+
+        await spyfall_broadcast(room, {
+            "type": "player_kicked",
+            "pid": pid,
+            "name": name,
+            "reason": "AFK (lobby)",
+            "host": room["host"]
+        })
+        return
+
+    # Oyun sırasında → ölü
+    pl["alive"] = False
+
+    await spyfall_broadcast(room, {
+        "type": "player_kicked",
+        "pid": pid,
+        "name": name,
+        "reason": "AFK",
+        "as_dead": True
+    })
+
+    # Spy AFK ise → civilians win
+    if pid == room["spy"]:
+        room["phase"] = "game_over"
+        await spyfall_broadcast(room, {
+            "type": "game_over",
+            "winner": "CIVILIANS",
+            "reason": "spy_afk"
+        })
+        return
+
+    # Eğer sadece spy hayattaysa → spy auto win
+    alive = spyfall_get_alive(room)
+    if room["spy"] in alive and len(alive) == 1:
+        room["phase"] = "game_over"
+        await spyfall_broadcast(room, {
+            "type": "game_over",
+            "winner": "SPY",
+            "reason": "all_civilians_afk",
+            "location": room["location"]
+        })
+        return
+
+    await spyfall_push_state(room)
+
+
+async def spyfall_afk_checker(room_id):
+    AFK_LIMIT = 90
+    WARNING = 15
+
+    while room_id in spyfall_rooms:
+        room = spyfall_rooms[room_id]
+        now = time.time()
+
+        for pid, pl in list(room["players"].items()):
+            last = pl.get("last_active", now)
+            inactivity = now - last
+
+            if AFK_LIMIT - WARNING <= inactivity < AFK_LIMIT:
+                try:
+                    await pl["ws"].send_text(json.dumps({
+                        "type": "afk_warning",
+                        "seconds_left": AFK_LIMIT - int(inactivity)
+                    }))
+                except:
+                    pass
+
+            if inactivity >= AFK_LIMIT:
+                await spyfall_kill_afk_player(room_id, pid)
+
+        await asyncio.sleep(5)
+
+
+# ======================================================
+# SPYFALL WEBSOCKET SERVER
+# ======================================================
+
+@app.websocket("/ws/spyfall")
+async def spyfall_ws(ws: WebSocket):
+    await ws.accept()
+
+    pid = secrets.token_hex(3)
+    room_id = None
+
+    try:
+        while True:
+            data = json.loads(await ws.receive_text())
+            typ = data.get("type")
+
+            # Join işlemlerinden önce bile AFK aktivite sayılır
+            if room_id and room_id in spyfall_rooms:
+                room = spyfall_rooms[room_id]
+                if pid in room["players"]:
+                    room["players"][pid]["last_active"] = time.time()
+
+            # ======================================================
+            # JOIN
+            # ======================================================
+            if typ == "join":
+                room_id = data["roomId"]
+                name = data.get("name", "Oyuncu")[:24]
+
+                if room_id not in spyfall_rooms:
+                    spyfall_rooms[room_id] = spyfall_new_room()
+                    spyfall_rooms[room_id]["afk_task"] = asyncio.create_task(
+                        spyfall_afk_checker(room_id)
+                    )
+
+                room = spyfall_rooms[room_id]
+
+                if room["phase"] != "lobby":
+                    await ws_send(ws, {"type": "join_error", "msg": "Oyun devam ediyor!"})
+                    continue
+
+                # Oyuncuyu ekle
+                room["players"][pid] = {
+                    "name": name,
+                    "ws": ws,
+                    "alive": True,
+                    "last_active": time.time()
+                }
+
+                if room["host"] is None:
+                    room["host"] = pid
+
+                await ws_send(ws, {"type": "joined", "pid": pid})
+
+                await spyfall_broadcast(room, {
+                    "type": "lobby_update",
+                    "players": {
+                        p: {
+                            "name": room["players"][p]["name"],
+                            "is_host": (p == room["host"])
+                        }
+                        for p in room["players"]
+                    },
+                    "host": room["host"]
+                })
+
+            # ======================================================
+            # START GAME
+            # ======================================================
+            elif typ == "start_game":
+                if not room_id or room_id not in spyfall_rooms:
+                    continue
+                room = spyfall_rooms[room_id]
+
+                if pid != room["host"]:
+                    continue
+
+                if spyfall_start_game(room):
+                    await spyfall_push_state(room)
+
+            # ======================================================
+            # CHAT
+            # ======================================================
+            elif typ == "chat":
+                if not room_id or room_id not in spyfall_rooms:
+                    continue
+                room = spyfall_rooms[room_id]
+                await spyfall_broadcast(room, {
+                    "type": "chat_message",
+                    "from": pid,
+                    "text": data.get("text", "")
+                })
+
+            # ======================================================
+            # NEXT TURN (SORU SORMA)
+            # ======================================================
+            elif typ == "ask":
+                if not room_id or room_id not in spyfall_rooms:
+                    continue
+                room = spyfall_rooms[room_id]
+
+                if pid != room["turn"]:
+                    continue
+
+                spyfall_next_turn(room)
+                await spyfall_push_state(room)
+
+            # ======================================================
+            # VOTING
+            # ======================================================
+            elif typ == "vote":
+                if not room_id or room_id not in spyfall_rooms:
+                    continue
+                room = spyfall_rooms[room_id]
+
+                if room["phase"] != "voting":
+                    continue
+
+                target = data.get("target")
+                if target is None:
+                    continue
+
+                room["votes"][pid] = target
+
+                alive_now = spyfall_get_alive(room)
+                if len(room["votes"]) >= len(alive_now):
+                    await spyfall_finish_voting(room)
+
+            # ======================================================
+            # FORCE VOTING (host)
+            # ======================================================
+            elif typ == "force_vote":
+                if not room_id or room_id not in spyfall_rooms:
+                    continue
+                room = spyfall_rooms[room_id]
+
+                if pid != room["host"]:
+                    continue
+                await spyfall_start_voting(room)
+
+            # ======================================================
+            # SPY GUESS
+            # ======================================================
+            elif typ == "spy_guess":
+                if not room_id or room_id not in spyfall_rooms:
+                    continue
+                room = spyfall_rooms[room_id]
+                await spyfall_process_guess(room, pid, data.get("guess"))
+
+    except WebSocketDisconnect:
+        pass
+
+    finally:
+        if room_id and room_id in spyfall_rooms:
+            room = spyfall_rooms[room_id]
+
+            if pid in room["players"]:
+                room["players"].pop(pid)
+
+            if not room["players"]:
+                # Oda tamamen boşaldıysa sil
+                spyfall_rooms.pop(room_id, None)
+            else:
+                # Host çıkmışsa host'u değiştir
+                if room["host"] == pid:
+                    keys = list(room["players"].keys())
+                    room["host"] = keys[0]
+
+                # Lobby'deysek lobby update gönder
+                if room["phase"] == "lobby":
+                    await spyfall_broadcast(room, {
+                        "type": "lobby_update",
+                        "players": {
+                            p: {
+                                "name": room["players"][p]["name"],
+                                "is_host": (p == room["host"])
+                            }
+                            for p in room["players"]
+                        },
+                        "host": room["host"]
+                    })
+                else:
+                    # Oyun sırasında biri ayrılırsa state'i güncelle
+                    await spyfall_push_state(room)
 
 # ==========================
 # TicTacToe (çok odalı)
@@ -1708,6 +2218,13 @@ def list_rooms():
             "players": len(r["players"]),
             "phase": r.get("phase", "waiting")
         })
+    for rid, r in spyfall_rooms.items():
+        out.append({
+            "game": "spyfall",
+            "roomId": rid,
+            "players": len(r["players"]),
+            "phase": r.get("phase", "lobby")
+        })
 
 
     for rid, r in cn_rooms.items():
@@ -1720,524 +2237,3 @@ def list_rooms():
 BASE_DIR = os.path.dirname(__file__)
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
-
-# ==========================
-# SPYFALL
-# ==========================
-
-import asyncio
-import json
-import random
-import secrets
-import time
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-from uvicorn import run
-
-# ======================================================
-# APP BASLANGICI
-# ======================================================
-
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-async def ws_send(ws: WebSocket, payload: dict):
-    await ws.send_text(json.dumps(payload))
-
-
-# ======================================================
-# SPYFALL ODA DEPOLARI
-# ======================================================
-
-spyfall_rooms = {}
-
-def spyfall_new_room():
-    return {
-        "players": {},          # pid -> {name, ws, alive, role, location_role, last_active}
-        "host": None,
-        "phase": "lobby",
-        "spy": None,
-        "location": None,
-        "turn": None,
-        "turn_order": [],
-        "votes": {},            # pid -> voted_pid
-        "vote_target": None,
-        "vote_timer": None,
-        "round_started": None,
-        "afk_task": None
-    }
-
-
-# ======================================================
-# MEKAN VE ROL HAVUZU
-# ======================================================
-
-SPYFALL_LOCATIONS = {
-    "Restoran": ["Garson", "Şef", "Kasiyer", "Bulaşıkçı", "Müşteri", "Müdür"],
-    "Havaalanı": ["Pilot", "Hostes", "Güvenlik", "Bagaj Görevlisi", "Bilet Kontrol", "Yolcu"],
-    "Hastane": ["Doktor", "Hemşire", "Hasta", "Radyolog", "Acil Görevlisi", "Cerrah"],
-    "Banka": ["Bankacı", "Güvenlik", "Müşteri", "Müdür", "Kasiyer", "Kredi Uzmanı"],
-    "Okul": ["Öğretmen", "Öğrenci", "Müdür Yardımcısı", "Kantinci", "Güvenlik", "Rehber Öğretmen"],
-    "Sinema": ["Biletçi", "Projeksiyoncu", "Seyirci", "Temizlikçi", "Yönetici", "Mısır Satıcısı"],
-    "Polis Merkezi": ["Polis", "Komiser", "Suçlu", "Avukat", "Sekreter", "Dedektif"]
-}
-
-
-# ======================================================
-# HELPER FONKSIYONLAR
-# ======================================================
-
-def spyfall_get_alive(room):
-    return [p for p, info in room["players"].items() if info.get("alive", True)]
-
-
-async def spyfall_broadcast(room, payload):
-    msg = json.dumps(payload)
-    dead = []
-
-    for pid, pl in list(room["players"].items()):
-        try:
-            await pl["ws"].send_text(msg)
-        except:
-            dead.append(pid)
-
-    for pid in dead:
-        room["players"].pop(pid, None)
-
-
-async def spyfall_push_state(room):
-    """Her oyuncuya rolünü ve state'i yollar."""
-    for pid, pl in room["players"].items():
-        my_role = pl.get("role")
-        my_location = None if my_role == "SPY" else room["location"]
-        my_location_role = pl.get("location_role")
-
-        players_public = {
-            p: {
-                "name": room["players"][p]["name"],
-                "alive": room["players"][p]["alive"]
-            } for p in room["players"]
-        }
-
-        payload = {
-            "type": "state",
-            "phase": room["phase"],
-            "host": room["host"],
-            "players": players_public,
-            "turn": room["turn"],
-            "me": {
-                "pid": pid,
-                "name": pl["name"],
-                "role": my_role,
-                "location": my_location,
-                "location_role": my_location_role,
-                "alive": pl["alive"]
-            },
-            "location_revealed": room["phase"] == "game_over"
-        }
-
-        try:
-            await pl["ws"].send_text(json.dumps(payload))
-        except:
-            pass
-
-
-def spyfall_next_turn(room):
-    alive = spyfall_get_alive(room)
-    if len(alive) <= 1:
-        return
-
-    order = room["turn_order"]
-    if room["turn"] not in order:
-        room["turn"] = order[0]
-        return
-
-    idx = order.index(room["turn"])
-    for i in range(1, len(order) + 1):
-        nxt = order[(idx + i) % len(order)]
-        if nxt in alive:
-            room["turn"] = nxt
-            return
-
-
-# ======================================================
-# OYUN BASLATMA
-# ======================================================
-
-def spyfall_start_game(room):
-    alive_pids = list(room["players"].keys())
-    if len(alive_pids) < 3:
-        return False
-
-    room["phase"] = "playing"
-
-    # Mekan seç
-    location = random.choice(list(SPYFALL_LOCATIONS.keys()))
-    room["location"] = location
-
-    # Spy
-    spy_pid = random.choice(alive_pids)
-    room["spy"] = spy_pid
-
-    # Roller dağıt
-    roles = SPYFALL_LOCATIONS[location][:]
-    random.shuffle(roles)
-
-    for pid in alive_pids:
-        if pid == spy_pid:
-            room["players"][pid]["role"] = "SPY"
-            room["players"][pid]["location_role"] = None
-        else:
-            room["players"][pid]["role"] = "CIVILIAN"
-            room["players"][pid]["location_role"] = roles.pop()
-
-    # Turn sırası
-    random.shuffle(alive_pids)
-    room["turn_order"] = alive_pids
-    room["turn"] = alive_pids[0]
-    room["round_started"] = time.time()
-
-    return True
-
-
-# ======================================================
-# VOTING
-# ======================================================
-
-async def spyfall_start_voting(room):
-    room["phase"] = "voting"
-    room["votes"] = {}
-    room["vote_target"] = None
-
-    await spyfall_broadcast(room, {
-        "type": "voting_started",
-        "duration": 40
-    })
-
-
-async def spyfall_finish_voting(room):
-    if room["phase"] != "voting":
-        return
-
-    votes = {}
-    for voter, target in room["votes"].items():
-        votes[target] = votes.get(target, 0) + 1
-
-    if not votes:
-        await spyfall_broadcast(room, {"type": "voting_result", "result": "no_votes"})
-        room["phase"] = "playing"
-        return
-
-    kicked = max(votes, key=votes.get)
-    room["players"][kicked]["alive"] = False
-
-    await spyfall_broadcast(room, {
-        "type": "voting_result",
-        "kicked": kicked,
-        "name": room["players"][kicked]["name"],
-        "was_spy": (kicked == room["spy"])
-    })
-
-    # Spy öldüyse → spy guess hakkı
-    if kicked == room["spy"]:
-        room["phase"] = "spy_guess"
-        await spyfall_broadcast(room, {
-            "type": "spy_guess_start",
-            "locations": list(SPYFALL_LOCATIONS.keys())
-        })
-        return
-
-    # Sivil öldüyse → oyuna devam
-    room["phase"] = "playing"
-
-
-# ======================================================
-# SPY GUESS
-# ======================================================
-
-async def spyfall_process_guess(room, pid, guess):
-    if pid != room["spy"]:
-        return
-
-    if guess == room["location"]:
-        await spyfall_broadcast(room, {
-            "type": "game_over",
-            "winner": "SPY",
-            "correct": True,
-            "location": room["location"]
-        })
-    else:
-        await spyfall_broadcast(room, {
-            "type": "game_over",
-            "winner": "CIVILIANS",
-            "correct": False,
-            "location": room["location"]
-        })
-
-    room["phase"] = "game_over"
-
-
-# ======================================================
-# AFK SISTEMI
-# ======================================================
-
-async def spyfall_kill_afk_player(room_id, pid):
-    room = spyfall_rooms.get(room_id)
-    if not room or pid not in room["players"]:
-        return
-
-    pl = room["players"][pid]
-    name = pl["name"]
-
-    # Lobby'de AFK → direkt at
-    if room["phase"] == "lobby":
-        room["players"].pop(pid)
-        if room["host"] == pid:
-            keys = list(room["players"].keys())
-            room["host"] = keys[0] if keys else None
-
-        await spyfall_broadcast(room, {
-            "type": "player_kicked",
-            "pid": pid,
-            "name": name,
-            "reason": "AFK (lobby)",
-            "host": room["host"]
-        })
-        return
-
-    # Oyun sırasında → ölü
-    pl["alive"] = False
-
-    await spyfall_broadcast(room, {
-        "type": "player_kicked",
-        "pid": pid,
-        "name": name,
-        "reason": "AFK",
-        "as_dead": True
-    })
-
-    # Spy AFK ise → civilians win
-    if pid == room["spy"]:
-        room["phase"] = "game_over"
-        await spyfall_broadcast(room, {
-            "type": "game_over",
-            "winner": "CIVILIANS",
-            "reason": "spy_afk"
-        })
-        return
-
-    # Eğer sadece spy hayattaysa → spy auto win
-    alive = spyfall_get_alive(room)
-    if room["spy"] in alive and len(alive) == 1:
-        room["phase"] = "game_over"
-        await spyfall_broadcast(room, {
-            "type": "game_over",
-            "winner": "SPY",
-            "reason": "all_civilians_afk",
-            "location": room["location"]
-        })
-        return
-
-    await spyfall_push_state(room)
-
-
-async def spyfall_afk_checker(room_id):
-    AFK_LIMIT = 90
-    WARNING = 15
-
-    while room_id in spyfall_rooms:
-        room = spyfall_rooms[room_id]
-        now = time.time()
-
-        for pid, pl in list(room["players"].items()):
-            last = pl.get("last_active", now)
-            inactivity = now - last
-
-            if AFK_LIMIT - WARNING <= inactivity < AFK_LIMIT:
-                try:
-                    await pl["ws"].send_text(json.dumps({
-                        "type": "afk_warning",
-                        "seconds_left": AFK_LIMIT - int(inactivity)
-                    }))
-                except:
-                    pass
-
-            if inactivity >= AFK_LIMIT:
-                await spyfall_kill_afk_player(room_id, pid)
-
-        await asyncio.sleep(5)
-
-
-# ======================================================
-# WEBSOCKET SERVER
-# ======================================================
-
-@app.websocket("/ws/spyfall")
-async def spyfall_ws(ws: WebSocket):
-    await ws.accept()
-
-    pid = secrets.token_hex(3)
-    room_id = None
-
-    try:
-        while True:
-            data = json.loads(await ws.receive_text())
-            typ = data.get("type")
-
-            # Join işlemlerinden önce bile AFK aktivite sayılır
-            if room_id and room_id in spyfall_rooms:
-                room = spyfall_rooms[room_id]
-                if pid in room["players"]:
-                    room["players"][pid]["last_active"] = time.time()
-
-            # ======================================================
-            # JOIN
-            # ======================================================
-            if typ == "join":
-                room_id = data["roomId"]
-                name = data.get("name", "Oyuncu")[:24]
-
-                if room_id not in spyfall_rooms:
-                    spyfall_rooms[room_id] = spyfall_new_room()
-                    spyfall_rooms[room_id]["afk_task"] = asyncio.create_task(
-                        spyfall_afk_checker(room_id)
-                    )
-
-                room = spyfall_rooms[room_id]
-
-                if room["phase"] != "lobby":
-                    await ws_send(ws, {"type": "join_error", "msg": "Oyun devam ediyor!"})
-                    continue
-
-                # Oyuncuyu ekle
-                room["players"][pid] = {
-                    "name": name,
-                    "ws": ws,
-                    "alive": True,
-                    "last_active": time.time()
-                }
-
-                if room["host"] is None:
-                    room["host"] = pid
-
-                await ws_send(ws, {"type": "joined", "pid": pid})
-
-                await spyfall_broadcast(room, {
-                    "type": "lobby_update",
-                    "players": {
-                        p: {"name": room["players"][p]["name"], "is_host": (p == room["host"])}
-                        for p in room["players"]
-                    },
-                    "host": room["host"]
-                })
-
-            # ======================================================
-            # START GAME
-            # ======================================================
-            elif typ == "start_game":
-                room = spyfall_rooms[room_id]
-                if pid != room["host"]:
-                    continue
-
-                if spyfall_start_game(room):
-                    await spyfall_push_state(room)
-
-            # ======================================================
-            # CHAT
-            # ======================================================
-            elif typ == "chat":
-                room = spyfall_rooms[room_id]
-                await spyfall_broadcast(room, {
-                    "type": "chat_message",
-                    "from": pid,
-                    "text": data.get("text", "")
-                })
-
-            # ======================================================
-            # NEXT TURN (SORU SORMA)
-            # ======================================================
-            elif typ == "ask":
-                room = spyfall_rooms[room_id]
-                if pid != room["turn"]:
-                    continue
-
-                spyfall_next_turn(room)
-                await spyfall_push_state(room)
-
-            # ======================================================
-            # VOTING
-            # ======================================================
-            elif typ == "vote":
-                room = spyfall_rooms[room_id]
-                if room["phase"] != "voting":
-                    continue
-
-                target = data.get("target")
-                room["votes"][pid] = target
-
-                alive_now = spyfall_get_alive(room)
-                if len(room["votes"]) >= len(alive_now):
-                    await spyfall_finish_voting(room)
-
-            # ======================================================
-            # FORCE VOTING
-            # ======================================================
-            elif typ == "force_vote":
-                room = spyfall_rooms[room_id]
-                if pid != room["host"]:
-                    continue
-                await spyfall_start_voting(room)
-
-            # ======================================================
-            # SPY GUESS
-            # ======================================================
-            elif typ == "spy_guess":
-                room = spyfall_rooms[room_id]
-                await spyfall_process_guess(room, pid, data.get("guess"))
-
-    except WebSocketDisconnect:
-        pass
-
-    finally:
-        if room_id and room_id in spyfall_rooms:
-            room = spyfall_rooms[room_id]
-
-            if pid in room["players"]:
-                room["players"].pop(pid)
-
-            if not room["players"]:
-                # Oda tamamen boşaldıysa sil
-                spyfall_rooms.pop(room_id, None)
-            else:
-                # Host çıkmışsa host'u değiştir
-                if room["host"] == pid:
-                    keys = list(room["players"].keys())
-                    room["host"] = keys[0]
-
-                # Lobby'deysek lobby update gönder
-                if room["phase"] == "lobby":
-                    await spyfall_broadcast(room, {
-                        "type": "lobby_update",
-                        "players": {
-                            p: {"name": room["players"][p]["name"], "is_host": (p == room["host"])}
-                            for p in room["players"]
-                        },
-                        "host": room["host"]
-                    })
-                else:
-                    # Oyun sırasında biri ayrılırsa state'i güncelle
-                    await spyfall_push_state(room)
-
-
-# ======================================================
-# ÇALIŞTIRMA
-# ======================================================
-
-if __name__ == "__main__":
-    run("server:app", host="0.0.0.0", port=8000)
