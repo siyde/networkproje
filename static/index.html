@@ -262,6 +262,12 @@
     .card.card-pixelwar::before{
       background:radial-gradient(circle at 100% 100%,rgba(94,234,212,.45),transparent 60%);
     }
+    .card.card-liars::before{
+      background:radial-gradient(circle at 50% 0,rgba(248,113,113,.45),transparent 60%);
+    }
+    .card.card-spyfall::before{
+      background:radial-gradient(circle at 50% 0,rgba(129,140,248,.45),transparent 60%);
+    }
 
     .card:hover::before{
       opacity:.9;
@@ -610,6 +616,108 @@
             </button>
           </div>
         </article>
+        <!-- Spyfall -->
+        <article class="card card-spyfall">
+          <div class="card-top">
+            <div class="card-title">
+              <div class="icon-chip">🕵️‍♀️</div>
+              <div class="card-title-text">
+                <strong>Spyfall</strong>
+                <span>Gizli ajanı bul</span>
+              </div>
+            </div>
+            <span class="tag">3–8 oyuncu</span>
+          </div>
+          <p class="card-body">
+            Tüm oyuncular aynı mekânda çalışıyormuş gibi rol yapar; içlerinden biri mekânı bilmeyen gizli ajandır. Sorularla ajanı bulmaya çalışırken, ajan da mekânı tahmin etmeye çalışır.
+          </p>
+          <p class="card-hint">
+            Oda kodu oluştur, arkadaşlarınla paylaş. Herkes aynı kodla odaya girer; roller otomatik dağılır. Soru-cevap turları sonrası oylama ile ajanı seçersiniz.
+          </p>
+          <div class="meta">
+            <span>Sosyal dedektiflik & bluff</span>
+            <span>URL: <code>/spyfall/</code></span>
+          </div>
+          <div class="actions">
+            <a class="btn play" href="/spyfall/">
+              <span class="icon">▶</span>
+              Oyna
+            </a>
+            <button class="btn ghost" type="button" onclick="copyHint('spyfall')">
+              <span class="icon">📋</span>
+              Kısa kurallar
+            </button>
+          </div>
+        </article>
+
+        <!-- Sumo Bash -->
+        <article class="card card-sumo">
+          <div class="card-top">
+            <div class="card-title">
+              <div class="icon-chip">🥊</div>
+              <div class="card-title-text">
+                <strong>Sumo Bash</strong>
+                <span>Arenada kalma savaşı</span>
+              </div>
+            </div>
+            <span class="tag">2–6 oyuncu</span>
+          </div>
+          <p class="card-body">
+            Yuvarlak arenada küçük sumo topları olarak savaş. Diğerlerini dışarı it, sen içeride kal.
+          </p>
+          <p class="card-hint">
+            Aynı oda ID’siyle bağlanan herkes aynı arenaya düşer. İlk giren host olur ve turu başlatır.
+          </p>
+          <div class="meta">
+            <span>Fizik tabanlı itme, tek tur maçlar</span>
+            <span>URL: <code>/sumobash/</code></span>
+          </div>
+          <div class="actions">
+            <a class="btn play" href="/sumobash/">
+              <span class="icon">▶</span>
+              Oyna
+            </a>
+            <button class="btn ghost" type="button" onclick="copyHint('sumobash')">
+              <span class="icon">🥊</span>
+              Oyun açıklaması
+            </button>
+          </div>
+        </article>
+        <!-- Liar's Bar -->
+        <article class="card card-liars">
+          <div class="card-top">
+            <div class="card-title">
+              <div class="icon-chip">🍸</div>
+              <div class="card-title-text">
+                <strong>Liar's Bar</strong>
+                <span>Blöf & Rus ruleti</span>
+              </div>
+            </div>
+            <span class="tag">3+ oyuncu</span>
+          </div>
+          <p class="card-body">
+            Q, K, A ve Joker kartlarıyla blöf yap; yakalanırsan Rus ruleti oynarsın, hayatta kalan son kişi kazanır.
+          </p>
+          <p class="card-hint">
+            Oda kodu oluştur, arkadaşlarınla paylaş. Her oyuncu 8 kart alır; sırası gelen, tur kartı neyse ona göre kart attığını iddia eder. İstersen “YALAN!” diyerek iddiayı açığa çıkarabilirsin.
+          </p>
+          <div class="meta">
+            <span>Blöf, risk & gerilim</span>
+            <span>URL: <code>/liars/</code></span>
+          </div>
+          <div class="actions">
+            <a class="btn play" href="/liarsbar/">
+              <span class="icon">▶</span>
+              Oyna
+            </a>
+            <button class="btn ghost" type="button" onclick="copyHint('liarsbar')">
+              <span class="icon">🍷</span>
+              Nasıl oynanır?
+            </button>
+          </div>
+        </article>
+
+
       </section>
 
       <!-- FOOTER -->
@@ -675,8 +783,29 @@
 - Oda kodu oluştur, arkadaşlarınla paylaş.
 - Herkes aynı haritadaki kareleri kendi rengine boyar.
 - Tur bitiminde en çok alanı kaplayan oyuncu kazanır.`;
-      }
-
+} else if(game === "sumobash"){
+        text =
+`Sumo Bash:
+- Aynı oda ID ile bağlanan oyuncular yuvarlak bir arenaya düşer.
+- Küçük sumo toplarını WASD veya yön tuşlarıyla hareket ettir.
+- Rakiplerini arenanın dışına it, sen içeride kal.
+- Son ayakta kalan oyuncu turu kazanır.`;
+      } else if(game === "liars"){
+        text =
+`Liar's Bar:
+- Oda kodu oluştur ve arkadaşlarınla paylaş.
+- Her oyuncu Q, K, A ve Jokerlerden oluşan 8 kart alır.
+- Sırası gelen, ekranda gösterilen tur kartı türüne göre kart attığını iddia eder (isterse yalan söyler).
+- Son oyundan sonra sıradaki oyuncu “YALAN!” diyebilir; doğruysa blöfçü, yanlışsa çağıran Rus ruletine gider.`;
+      } else if(game === "spyfall"){
+        text =
+`Spyfall:
+- Bir oda kodu oluştur, kodu arkadaşlarınla paylaş.
+- Herkes aynı oda kodu ile oyuna bağlanır (3–8 kişi).
+- Herkesin bir mekânı ve rolü vardır; yalnızca ajan mekânı bilmez.
+- Sırayla birbirinize sorular sorarak kimin ajan olabileceğini anlamaya çalışın.
+- Oy sonunda oylama ile birini ajan diye seçersiniz; eğer ajan seçilirse, ajan mekânı tahmin etmeye çalışır.`;
+}
       if(text && navigator.clipboard){
         navigator.clipboard.writeText(text)
           .then(()=>alert("Kısa oyun açıklaması panoya kopyalandı ✨"))
