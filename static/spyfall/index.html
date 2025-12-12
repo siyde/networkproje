@@ -693,7 +693,7 @@
 
       <div class="join-footer">
         <div>Oda kodunu arkadaşlarınla paylaş, hepsi aynı kodla bağlansın.</div>
-        
+
       </div>
     </div>
   </section>
@@ -842,7 +842,10 @@
 
   function connectToRoom(room, name) {
     roomId = room;
-    const url = `ws://localhost:8000/ws/spyfall`;  // backend burada çalışıyor
+const proto = (location.protocol === "https:") ? "wss" : "ws";
+const host = location.host || "localhost:8000"; // file:// açarsan fallback
+const url = `${proto}://${host}/ws/spyfall`;
+
     ws = new WebSocket(url);
 
     ws.onopen = () => {
