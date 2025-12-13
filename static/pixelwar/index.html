@@ -1,143 +1,713 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <title>Kare Kapmaca</title>
-    <style>
-        body { font-family: 'Segoe UI', sans-serif; text-align: center; background: #2c3e50; color: white; margin: 0; padding: 20px; }
-        .container { max-width: 600px; margin: 0 auto; }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Kare Kapmaca</title>
 
-        #loginArea { background: #34495e; padding: 20px; border-radius: 10px; margin-top: 50px; }
-        input, button { padding: 12px; font-size: 16px; border-radius: 5px; border: none; margin: 5px; }
-        button { background: #e74c3c; color: white; cursor: pointer; font-weight: bold; }
-        button:hover { background: #c0392b; }
+  <style>
+    :root{
+      --bg1:#0b1020;
+      --bg2:#0a1530;
+      --glass: rgba(15, 20, 35, .55);
+      --glass2: rgba(20, 25, 45, .45);
+      --stroke: rgba(255,255,255,.12);
+      --stroke2: rgba(255,255,255,.08);
+      --text: rgba(255,255,255,.92);
+      --muted: rgba(255,255,255,.65);
+      --muted2: rgba(255,255,255,.45);
 
-        #gameArea { display: none; }
-        #infoBar { display: flex; justify-content: space-between; align-items: center; background: #34495e; padding: 10px; border-radius: 8px; margin-bottom: 15px; }
-        #timer { font-size: 2em; font-weight: bold; color: #f1c40f; }
+      --accentA:#00E5FF;
+      --accentB:#9B5CFF;
+      --accentC:#FF3D8D;
+      --good:#29f19c;
+      --warn:#f1c40f;
 
-        /* OYUN ALANI IZGARASI */
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(6, 1fr); /* 6 Sütun */
-            gap: 5px;
-            background: #7f8c8d;
-            padding: 5px;
-            border-radius: 8px;
-        }
-        .cell {
-            aspect-ratio: 1; /* Kare olması için */
-            background-color: #ecf0f1;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: transform 0.1s;
-        }
-        .cell:active { transform: scale(0.9); }
+      --radiusXL: 28px;
+      --radius: 16px;
+      --shadow: 0 20px 70px rgba(0,0,0,.45);
+    }
 
-        .score-board { margin-top: 20px; text-align: left; }
-        .score-item { padding: 5px; margin: 2px 0; border-radius: 4px; font-weight: bold; }
-    </style>
+    *{ box-sizing:border-box; }
+    html, body { height:100%; }
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(1200px 600px at 10% 30%, rgba(0,229,255,.18), transparent 55%),
+        radial-gradient(900px 500px at 85% 40%, rgba(155,92,255,.18), transparent 55%),
+        radial-gradient(900px 500px at 85% 90%, rgba(255,61,141,.14), transparent 55%),
+        linear-gradient(135deg, var(--bg2), var(--bg1));
+      overflow-x: hidden;
+    }
+
+    .wrap{
+      min-height:100%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding: 36px 16px;
+    }
+
+    /* MAIN GLASS PANEL */
+    .panel{
+      width: min(1200px, 96vw);
+      border-radius: var(--radiusXL);
+      background: linear-gradient(120deg, rgba(0,229,255,.10), rgba(155,92,255,.10), rgba(255,61,141,.08));
+      padding: 1px; /* stroke-like */
+      box-shadow: var(--shadow);
+      position: relative;
+    }
+
+    .panel::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      border-radius: var(--radiusXL);
+      background: radial-gradient(800px 320px at 70% 30%, rgba(120,120,255,.18), transparent 60%);
+      pointer-events:none;
+      opacity:.7;
+    }
+
+    .panel-inner{
+      border-radius: var(--radiusXL);
+      background: rgba(10, 14, 28, .55);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid rgba(255,255,255,.10);
+      padding: 28px 28px 26px;
+      position: relative;
+      overflow:hidden;
+    }
+
+    .topbar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .brand{
+      display:flex;
+      align-items:center;
+      gap: 14px;
+      min-width: 240px;
+    }
+
+    .logo{
+      width:46px;
+      height:46px;
+      border-radius: 14px;
+      display:grid;
+      place-items:center;
+      background: linear-gradient(135deg, rgba(0,229,255,.28), rgba(155,92,255,.28));
+      border: 1px solid rgba(255,255,255,.14);
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+      font-size: 22px;
+    }
+
+    .title{
+      font-size: 30px;
+      font-weight: 900;
+      letter-spacing: .5px;
+      margin:0;
+      line-height: 1;
+      background: linear-gradient(90deg, var(--accentA), var(--accentB), var(--accentC));
+      -webkit-background-clip: text;
+      background-clip:text;
+      color: transparent;
+    }
+
+    .subtitle{
+      margin-top: 6px;
+      font-size: 13px;
+      color: var(--muted2);
+      letter-spacing:.2px;
+    }
+
+    .badges{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content:flex-end;
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap: 10px;
+      padding: 9px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.12);
+      color: var(--muted);
+      font-size: 13px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    .dot{
+      width:10px;
+      height:10px;
+      border-radius:50%;
+      background: rgba(255,255,255,.35);
+      box-shadow: 0 0 0 3px rgba(255,255,255,.08);
+    }
+    .dot.ok{ background: var(--good); box-shadow: 0 0 0 3px rgba(41,241,156,.14); }
+    .dot.bad{ background: #ff5b5b; box-shadow: 0 0 0 3px rgba(255,91,91,.14); }
+
+    .divider{
+      height: 1px;
+      width:100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.14), transparent);
+      margin: 16px 0 18px;
+    }
+
+    /* CENTER CARD (LOGIN/GAME) */
+    .center{
+      display:flex;
+      justify-content:center;
+    }
+
+    .card{
+      width: min(740px, 100%);
+      border-radius: 22px;
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      border: 1px solid rgba(255,255,255,.10);
+      box-shadow: 0 14px 40px rgba(0,0,0,.25);
+      padding: 22px;
+      position: relative;
+      overflow:hidden;
+    }
+    .card::before{
+      content:"";
+      position:absolute;
+      inset:-60px -60px auto auto;
+      width: 280px;
+      height: 280px;
+      background: radial-gradient(circle, rgba(0,229,255,.22), transparent 60%);
+      filter: blur(4px);
+      opacity:.65;
+      pointer-events:none;
+    }
+    .card::after{
+      content:"";
+      position:absolute;
+      inset:auto auto -80px -80px;
+      width: 340px;
+      height: 340px;
+      background: radial-gradient(circle, rgba(255,61,141,.18), transparent 62%);
+      filter: blur(4px);
+      opacity:.55;
+      pointer-events:none;
+    }
+
+    .card-head{
+      text-align:left;
+      margin-bottom: 14px;
+      position: relative;
+    }
+    .card-head h2{
+      margin:0;
+      font-size: 22px;
+      font-weight: 850;
+      letter-spacing:.2px;
+      color: rgba(255,255,255,.92);
+    }
+    .card-head p{
+      margin: 6px 0 0;
+      color: var(--muted2);
+      font-size: 13px;
+      line-height: 1.4;
+      max-width: 520px;
+    }
+
+    .form{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 14px;
+      position: relative;
+    }
+
+    .field{
+      text-align:left;
+    }
+    .label{
+      font-size: 12px;
+      color: var(--muted2);
+      margin: 0 0 8px 2px;
+      letter-spacing:.2px;
+    }
+
+    input{
+      width:100%;
+      padding: 14px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.18);
+      color: rgba(255,255,255,.92);
+      outline:none;
+      transition: .15s ease;
+      font-size: 15px;
+    }
+    input::placeholder{ color: rgba(255,255,255,.38); }
+    input:focus{
+      border-color: rgba(0,229,255,.35);
+      box-shadow: 0 0 0 4px rgba(0,229,255,.12);
+    }
+
+    .actions{
+      grid-column: 1 / -1;
+      display:flex;
+      gap: 12px;
+      align-items:center;
+      justify-content:center;
+      margin-top: 4px;
+      flex-wrap:wrap;
+    }
+
+    .btn{
+      border: none;
+      cursor:pointer;
+      font-weight: 800;
+      letter-spacing:.3px;
+      border-radius: 999px;
+      padding: 14px 20px;
+      min-width: 210px;
+      transition: transform .12s ease, filter .12s ease, box-shadow .12s ease;
+      color: rgba(255,255,255,.95);
+    }
+    .btn:active{ transform: scale(.98); }
+
+    .btn.primary{
+      background: linear-gradient(90deg, rgba(0,229,255,.95), rgba(90,160,255,.85));
+      box-shadow: 0 12px 28px rgba(0,229,255,.16);
+    }
+    .btn.primary:hover{ filter: brightness(1.05); }
+
+    .btn.secondary{
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.12);
+      color: rgba(255,255,255,.86);
+    }
+    .btn.secondary:hover{ filter: brightness(1.06); }
+
+    .hint{
+      margin-top: 10px;
+      text-align:center;
+      color: var(--muted2);
+      font-size: 12.5px;
+    }
+
+    /* GAME UI */
+    #gameArea{ display:none; }
+
+    .game-top{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 12px;
+      flex-wrap:wrap;
+      margin-top: 8px;
+    }
+
+    .me{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.12);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    #colorBox{
+      display:inline-block;
+      width: 26px;
+      height: 18px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,.25);
+      box-shadow: inset 0 0 0 2px rgba(0,0,0,.18);
+    }
+
+    .timer{
+      font-size: 26px;
+      font-weight: 950;
+      letter-spacing: 1px;
+      color: var(--warn);
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: rgba(241,196,15,.10);
+      border: 1px solid rgba(241,196,15,.22);
+    }
+
+    .game-grid-wrap{
+      margin-top: 16px;
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.10);
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
+      background: rgba(127,140,141,.28);
+      padding: 10px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.10);
+    }
+
+    .cell{
+      aspect-ratio: 1;
+      border-radius: 12px;
+      background: rgba(236,240,241,.92);
+      cursor:pointer;
+      transition: transform .08s ease, filter .08s ease;
+      border: 1px solid rgba(0,0,0,.10);
+    }
+    .cell:hover{ filter: brightness(1.02); }
+    .cell:active{ transform: scale(.96); }
+
+    .status{
+      margin-top: 14px;
+      font-size: 14px;
+      color: rgba(255,255,255,.86);
+    }
+
+    .startbar{
+      margin-top: 12px;
+      display:flex;
+      justify-content:center;
+      gap: 12px;
+      flex-wrap:wrap;
+    }
+
+    .btn.start{
+      background: linear-gradient(90deg, rgba(41,241,156,.92), rgba(39,174,96,.92));
+      box-shadow: 0 12px 26px rgba(41,241,156,.14);
+      min-width: 260px;
+    }
+    .btn.start:hover{ filter: brightness(1.04); }
+
+    .scores{
+      margin-top: 16px;
+      text-align:left;
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 16px;
+      padding: 14px;
+    }
+    .scores h4{
+      margin:0 0 10px;
+      font-size: 14px;
+      color: var(--muted);
+      letter-spacing:.2px;
+    }
+    .score-item{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding: 10px 10px;
+      margin: 8px 0;
+      border-radius: 12px;
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.08);
+      font-weight: 750;
+      color: rgba(255,255,255,.88);
+    }
+    .score-badge{
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(0,229,255,.10);
+      border: 1px solid rgba(0,229,255,.18);
+      color: rgba(255,255,255,.90);
+      font-weight: 900;
+      letter-spacing:.2px;
+    }
+
+    /* Responsive */
+    @media (max-width: 680px){
+      .panel-inner{ padding: 18px; }
+      .title{ font-size: 26px; }
+      .form{ grid-template-columns: 1fr; }
+      .btn{ min-width: 100%; }
+      .grid{ gap: 6px; }
+      .cell{ border-radius: 10px; }
+    }
+  </style>
 </head>
+
 <body>
+  <div class="wrap">
+    <div class="panel">
+      <div class="panel-inner">
 
-<div class="container">
-    <h1>🎨 KARE KAPMACA</h1>
+        <!-- TOP BAR -->
+        <div class="topbar">
+          <div class="brand">
+            <div class="logo">🎨</div>
+            <div>
+              <h1 class="title">KARE KAPMACA</h1>
+              <div class="subtitle">Aynı odada herkes kareleri kapar — en çok kareyi alan kazanır.</div>
+            </div>
+          </div>
 
-    <div id="loginArea">
-        <h3>Savaşa Katıl</h3>
-        <input id="roomId" placeholder="Oda Adı (örn: savas1)" value="savas1">
-        <input id="username" placeholder="Adın">
-        <button onclick="joinGame()">Giriş Yap</button>
-    </div>
-
-    <div id="gameArea">
-        <div id="infoBar">
-            <div id="myColorDisplay">Benim Rengim: <span id="colorBox" style="padding:0 15px; border:1px solid #fff;">&nbsp;</span></div>
-            <div id="timer">--</div>
+          <div class="badges">
+            <div class="pill" id="serverPill">
+              <span style="opacity:.75;">Sunucu:</span>
+              <b id="serverHost" style="color:rgba(255,255,255,.90);"></b>
+            </div>
+            <div class="pill" id="connPill">
+              <span class="dot" id="connDot"></span>
+              <span id="connText">Bağlantı bekleniyor...</span>
+            </div>
+          </div>
         </div>
 
-        <div id="grid" class="grid">
+        <div class="divider"></div>
+
+        <div class="center">
+          <div class="card">
+
+            <!-- LOGIN AREA -->
+            <div id="loginArea">
+              <div class="card-head">
+                <h2>Odaya bağlan</h2>
+                <p>Oda adını arkadaşlarınla paylaş. Herkes aynı oda adıyla girsin. Sonra “Savaşı Başlat” deyin.</p>
+              </div>
+
+              <div class="form">
+                <div class="field">
+                  <div class="label">Oda adı</div>
+                  <input id="roomId" placeholder="örn: savas1" value="savas1" autocomplete="off">
+                </div>
+
+                <div class="field">
+                  <div class="label">Takma ad</div>
+                  <input id="username" placeholder="Adın" autocomplete="off">
+                </div>
+
+                <div class="actions">
+                  <button class="btn primary" onclick="joinGame()">🚀 ODAYA KATIL</button>
+                  <button class="btn secondary" onclick="prefillRandom()">🎲 Rastgele İsim</button>
+                </div>
+
+                <div class="hint">İpucu: Enter’a basarak da katılabilirsin.</div>
+              </div>
             </div>
 
-        <div id="status" style="margin-top:15px; font-size:1.2em;">Oyunun başlaması bekleniyor...</div>
-        <button id="startBtn" onclick="startGame()" style="margin-top:10px; width:100%; background:#27ae60;">SAVAŞI BAŞLAT</button>
+            <!-- GAME AREA -->
+            <div id="gameArea">
+              <div class="card-head">
+                <h2>Savaş alanı</h2>
+                <p>Karelere tıkla ve alanı kendi renginle boya. Süre bitince en yüksek skor kazanır.</p>
+              </div>
 
-        <div id="scores" class="score-board"></div>
+              <div class="game-top">
+                <div class="me">
+                  Benim rengim: <span id="colorBox"></span>
+                </div>
+                <div class="timer" id="timer">--</div>
+              </div>
+
+              <div class="game-grid-wrap">
+                <div id="grid" class="grid"></div>
+              </div>
+
+              <div class="status" id="status">Oyunun başlaması bekleniyor...</div>
+
+              <div class="startbar">
+                <button id="startBtn" class="btn start" onclick="startGame()">✅ SAVAŞI BAŞLAT</button>
+                <button class="btn secondary" onclick="leaveToLogin()">⬅️ Çık / Oda Değiştir</button>
+              </div>
+
+              <div class="scores" id="scores"></div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
     </div>
-</div>
+  </div>
 
-<script>
+  <script>
     let ws;
     const gridSize = 36; // 6x6
 
-    // Izgarayı oluştur
+    // UI refs
+    const serverHostEl = document.getElementById("serverHost");
+    const connDot = document.getElementById("connDot");
+    const connText = document.getElementById("connText");
+
+    serverHostEl.textContent = location.host || "localhost";
+
+    // Build grid once
     const gridEl = document.getElementById("grid");
-    for(let i=0; i<gridSize; i++) {
-        const div = document.createElement("div");
-        div.className = "cell";
-        div.id = "c-" + i;
-        div.onclick = () => clickCell(i);
-        gridEl.appendChild(div);
+    for (let i = 0; i < gridSize; i++) {
+      const div = document.createElement("div");
+      div.className = "cell";
+      div.id = "c-" + i;
+      div.onclick = () => clickCell(i);
+      gridEl.appendChild(div);
+    }
+
+    // Enter to join
+    document.getElementById("roomId").addEventListener("keydown", (e)=>{ if(e.key==="Enter") joinGame(); });
+    document.getElementById("username").addEventListener("keydown", (e)=>{ if(e.key==="Enter") joinGame(); });
+
+    function setConn(status){
+      // status: "idle" | "ok" | "bad"
+      connDot.classList.remove("ok","bad");
+      if(status === "ok") connDot.classList.add("ok");
+      if(status === "bad") connDot.classList.add("bad");
+    }
+
+    setConn("idle");
+    connText.textContent = "Bağlantı bekleniyor...";
+
+    function prefillRandom(){
+      const animals = ["Panda","Tilki","Kedi","Kartal","Aslan","Kurt","MaviBalina","Rakun","Yunus","Kaplan"];
+      const n = animals[Math.floor(Math.random()*animals.length)] + Math.floor(100 + Math.random()*900);
+      document.getElementById("username").value = n;
+      document.getElementById("username").focus();
     }
 
     function joinGame() {
-        const r = document.getElementById("roomId").value;
-        const n = document.getElementById("username").value;
-        if(!r || !n) return alert("Eksik bilgi!");
+      const r = document.getElementById("roomId").value.trim();
+      const n = document.getElementById("username").value.trim();
+      if (!r || !n) return alert("Eksik bilgi!");
 
-        const proto = location.protocol === "https:" ? "wss" : "ws";
-        ws = new WebSocket(proto + "://" + location.host + "/ws/pixelwar");
+      // Close old socket if exists
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        try { ws.close(); } catch(e){}
+      }
 
+      const proto = location.protocol === "https:" ? "wss" : "ws";
+      ws = new WebSocket(proto + "://" + location.host + "/ws/pixelwar");
 
-        ws.onopen = () => {
-            ws.send(JSON.stringify({type: "join", roomId: r, name: n}));
-            document.getElementById("loginArea").style.display = "none";
-            document.getElementById("gameArea").style.display = "block";
-        };
+      connText.textContent = "Bağlanıyor...";
+      setConn("idle");
 
-        ws.onmessage = (e) => {
-            const data = JSON.parse(e.data);
+      ws.onopen = () => {
+        connText.textContent = "Bağlandı";
+        setConn("ok");
 
-            if(data.type === "welcome") {
-                document.getElementById("colorBox").style.backgroundColor = data.color;
-            }
-            else if(data.type === "state") {
-                // Tüm tahtayı boya
-                data.board.forEach((color, idx) => {
-                    const cell = document.getElementById("c-" + idx);
-                    cell.style.backgroundColor = color || "#ecf0f1";
-                });
-                updateScores(data.scores);
-            }
-            else if(data.type === "tick") {
-                document.getElementById("timer").innerText = data.seconds;
-                document.getElementById("status").innerText = "⏳ SAVAŞ DEVAM EDİYOR!";
-                document.getElementById("startBtn").style.display = "none";
-            }
-            else if(data.type === "game_over") {
-                document.getElementById("timer").innerText = "BİTTİ";
-                document.getElementById("status").innerText = `🏆 KAZANAN: ${data.winner}`;
-                document.getElementById("startBtn").style.display = "block";
-                document.getElementById("startBtn").innerText = "YENİDEN BAŞLAT";
-            }
-        };
+        ws.send(JSON.stringify({ type: "join", roomId: r, name: n }));
+
+        document.getElementById("loginArea").style.display = "none";
+        document.getElementById("gameArea").style.display = "block";
+        document.getElementById("status").innerText = "Oyunun başlaması bekleniyor...";
+        document.getElementById("startBtn").style.display = "inline-flex";
+        document.getElementById("startBtn").innerText = "✅ SAVAŞI BAŞLAT";
+      };
+
+      ws.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+
+        if (data.type === "welcome") {
+          document.getElementById("colorBox").style.backgroundColor = data.color;
+        }
+        else if (data.type === "state") {
+          data.board.forEach((color, idx) => {
+            const cell = document.getElementById("c-" + idx);
+            cell.style.backgroundColor = color || "rgba(236,240,241,.92)";
+          });
+          updateScores(data.scores);
+        }
+        else if (data.type === "tick") {
+          document.getElementById("timer").innerText = data.seconds;
+          document.getElementById("status").innerText = "⏳ SAVAŞ DEVAM EDİYOR!";
+          document.getElementById("startBtn").style.display = "none";
+        }
+        else if (data.type === "game_over") {
+          document.getElementById("timer").innerText = "BİTTİ";
+          document.getElementById("status").innerText = `🏆 KAZANAN: ${data.winner}`;
+          document.getElementById("startBtn").style.display = "inline-flex";
+          document.getElementById("startBtn").innerText = "🔁 YENİDEN BAŞLAT";
+        }
+      };
+
+      ws.onerror = () => {
+        connText.textContent = "Bağlantı hatası";
+        setConn("bad");
+      };
+
+      ws.onclose = () => {
+        connText.textContent = "Bağlantı kapandı";
+        setConn("bad");
+      };
     }
 
     function clickCell(idx) {
-        if(ws) ws.send(JSON.stringify({type: "click", idx: idx}));
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "click", idx: idx }));
+      }
     }
 
     function startGame() {
-        if(ws) ws.send(JSON.stringify({type: "start"}));
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "start" }));
+      }
     }
 
     function updateScores(scores) {
-        const div = document.getElementById("scores");
-        div.innerHTML = "<h4>Skorlar:</h4>";
-        for (const [name, score] of Object.entries(scores)) {
-            div.innerHTML += `<div class="score-item" style="border:1px solid #555;">${name}: ${score} kare</div>`;
-        }
+      const div = document.getElementById("scores");
+      div.innerHTML = "<h4>Skorlar</h4>";
+
+      // Skorları büyükten küçüğe sırala
+      const arr = Object.entries(scores || {}).sort((a,b) => (b[1]||0)-(a[1]||0));
+
+      if (arr.length === 0) {
+        div.innerHTML += `<div style="color:rgba(255,255,255,.55); font-size:13px; padding:8px 2px;">
+          Henüz skor yok.
+        </div>`;
+        return;
+      }
+
+      for (const [name, score] of arr) {
+        div.innerHTML += `
+          <div class="score-item">
+            <span>${escapeHtml(name)}</span>
+            <span class="score-badge">${score} kare</span>
+          </div>
+        `;
+      }
     }
-</script>
+
+    function leaveToLogin(){
+      try { if(ws) ws.close(); } catch(e){}
+      document.getElementById("gameArea").style.display = "none";
+      document.getElementById("loginArea").style.display = "block";
+      document.getElementById("timer").innerText = "--";
+      document.getElementById("scores").innerHTML = "";
+      connText.textContent = "Bağlantı bekleniyor...";
+      setConn("idle");
+
+      // board reset
+      for (let i=0;i<gridSize;i++){
+        const cell = document.getElementById("c-"+i);
+        cell.style.backgroundColor = "rgba(236,240,241,.92)";
+      }
+    }
+
+    function escapeHtml(str){
+      return String(str)
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+  </script>
 </body>
 </html>
