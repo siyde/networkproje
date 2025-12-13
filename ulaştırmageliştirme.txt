@@ -144,7 +144,7 @@ h) AWS / EC2 Bilgileri (Özel değil, öğrenci içindir)
 
 IP adresin:
 
-52.59.239.82
+18.194.45.143
 
 
 Web adresi:
