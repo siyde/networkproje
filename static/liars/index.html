@@ -33,40 +33,82 @@
         
         /* Join Screen */
         .join-form {
-            max-width: 500px;
+            max-width: 520px;
             margin: 0 auto;
-            background: rgba(0, 0, 0, 0.7);
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.85), rgba(26, 0, 0, 0.9));
             padding: 40px;
-            border-radius: 15px;
-            border: 2px solid #ffd700;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 215, 0, 0.4);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+        }
+        .join-form h2 {
+            text-align: center;
+            margin-bottom: 10px;
+            color: #ffd700;
+            font-size: 28px;
+            text-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
+        }
+        .join-sub {
+            text-align: center;
+            font-size: 14px;
+            color: #9ca3af;
+            margin-bottom: 25px;
+        }
+        .input-row {
+            margin-bottom: 18px;
+        }
+        .input-row label {
+            display: block;
+            font-size: 13px;
+            color: #9ca3af;
+            margin-bottom: 6px;
+            padding-left: 4px;
         }
         .join-form input {
             width: 100%;
-            padding: 15px;
-            margin: 15px 0;
-            background: rgba(255, 255, 255, 0.1);
-            border: 2px solid #ffd700;
-            border-radius: 8px;
+            padding: 12px 16px;
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid rgba(255, 215, 0, 0.3);
+            border-radius: 999px;
             color: #fff;
-            font-size: 18px;
+            font-size: 15px;
+            outline: none;
+            transition: all 0.2s;
+        }
+        .join-form input:focus {
+            border-color: #ffd700;
+            background: rgba(15, 23, 42, 0.9);
+            box-shadow: 0 0 0 2px rgba(255, 215, 0, 0.15);
+        }
+        .join-form input::placeholder {
+            color: rgba(156, 163, 175, 0.6);
+        }
+        .join-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 25px;
         }
         .join-form button {
-            width: 100%;
-            padding: 15px;
-            margin: 10px 0;
-            background: #ffd700;
+            flex: 1;
+            padding: 13px 20px;
+            background: linear-gradient(135deg, #ffd700, #ffed4e);
             color: #1a0000;
             border: none;
-            border-radius: 8px;
-            font-size: 18px;
-            font-weight: bold;
+            border-radius: 999px;
+            font-size: 15px;
+            font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.2s;
+            box-shadow: 0 8px 20px rgba(255, 215, 0, 0.4);
         }
         .join-form button:hover {
-            background: #ffed4e;
+            background: linear-gradient(135deg, #ffed4e, #ffd700);
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(255, 215, 0, 0.5);
+            box-shadow: 0 12px 28px rgba(255, 215, 0, 0.6);
+        }
+        .join-form button:active {
+            transform: translateY(0);
+            box-shadow: 0 4px 12px rgba(255, 215, 0, 0.4);
         }
         
         /* Lobby */
@@ -412,11 +454,23 @@
         <!-- Join Screen -->
         <div id="joinScreen" class="screen active">
             <div class="join-form">
-                <h2 style="text-align:center; margin-bottom:20px; color:#ffd700;">Oyuna Katıl</h2>
-                <input type="text" id="nameInput" placeholder="İsminiz" maxlength="24">
-                <input type="text" id="roomInput" placeholder="Oda Kodu" maxlength="20">
-                <button onclick="createRoom()">🆕 Yeni Oda Aç</button>
-                <button onclick="joinRoom()">🚪 Odaya Katıl</button>
+                <h2>Oyuna Katıl</h2>
+                <div class="join-sub">İstersen yeni bir oda aç, istersen arkadaşının odasına katıl.</div>
+                
+                <div class="input-row">
+                    <label for="nameInput">Takma adın</label>
+                    <input type="text" id="nameInput" placeholder="İsminiz" maxlength="24">
+                </div>
+                
+                <div class="input-row">
+                    <label for="roomInput">Oda kodu</label>
+                    <input type="text" id="roomInput" placeholder="Oda Kodu" maxlength="20">
+                </div>
+                
+                <div class="join-actions">
+                    <button onclick="createRoom()">🆕 Yeni Oda Aç</button>
+                    <button onclick="joinRoom()">🚪 Odaya Katıl</button>
+                </div>
             </div>
         </div>
         
