@@ -1470,7 +1470,7 @@ def liars_check_winner(room):
     return None
 
 async def liars_start_roulette(room, victim_pid):
-    """Rusça rulet başlat"""
+    """Rus ruleti başlat"""
     # Kullanılan mermi sayısına göre şans hesapla
     shots_used = room["players"][victim_pid].get("shots_used", 0)
     # Kalan namlu sayısı: 6 - (shots_used % 6)
